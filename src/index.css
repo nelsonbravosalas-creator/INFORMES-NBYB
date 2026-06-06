@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Sophisticated Dark Global Core */
+html {
+  background-color: #0d0d0d !important;
+  color-scheme: dark !important;
+}
+
+body {
+  background-color: #0d0d0d !important;
+  color: #e4e4e7 !important; /* zinc-200 */
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Premium Scrollbar styling */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #0f0f0f;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #27272a; /* zinc-800 */
+  border-radius: 99px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46; /* zinc-700 */
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+
