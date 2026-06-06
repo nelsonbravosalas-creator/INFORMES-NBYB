@@ -1,0 +1,40 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "INFORMES-NBYB Dev Server (Express + Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "description": "Starts Express server on port 3000 with Vite HMR for React development"
+    },
+    {
+      "name": "Build for Vercel",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build:vercel"],
+      "port": null,
+      "description": "Compiles frontend for Vercel deployment (output to dist/)"
+    },
+    {
+      "name": "Build Single-File Mobile",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "build:mobile"],
+      "port": null,
+      "description": "Creates standalone HTML file for offline Android use (output to dist-mobile/)"
+    },
+    {
+      "name": "TypeScript Type Check",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "lint"],
+      "port": null,
+      "description": "Validates TypeScript types without building"
+    },
+    {
+      "name": "Database Schema Init",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "db:init"],
+      "port": null,
+      "description": "Initialize Neon PostgreSQL schema and seed data (requires DATABASE_URL env var)"
+    }
+  ]
+}
