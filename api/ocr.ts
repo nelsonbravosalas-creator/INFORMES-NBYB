@@ -7,8 +7,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { json, error } from "./_lib/db";
 
-export const config = { runtime: "nodejs" };
-
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") {
     return error("Método no permitido", 405);

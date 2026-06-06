@@ -4,8 +4,6 @@
  */
 import { sql, json, error } from "../_lib/db";
 
-export const config = { runtime: "nodejs" };
-
 export default async function handler(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url);
