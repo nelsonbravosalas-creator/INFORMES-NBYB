@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { HVACReport, AdminSettings, ServiceOrderReport } from "./types";
+import { HVACReport, AdminSettings, ServiceOrderReport, AuthSession } from "./types";
 import {
   getReports, saveReport, deleteReport, getAdminSettings, saveAdminSettings,
   getServiceOrders, saveServiceOrder, deleteServiceOrder,
+  getSession, logout,
 } from "./utils/storage";
 import { exportReportsToExcel } from "./utils/excel";
 import {
@@ -14,16 +15,26 @@ import ServiceOrderForm from "./components/ServiceOrderForm";
 import ServiceOrderViewerModal from "./components/ServiceOrderViewerModal";
 import AdminSettingsModal from "./components/AdminSettingsModal";
 import ReportViewerModal from "./components/ReportViewerModal";
+import PWAInstallButton, { OnlineIndicator, PWAHeaderInstallButton } from "./components/PWAInstallButton";
+import LoginComponent from "./components/LoginComponent";
+import UsersModal from "./components/UsersModal";
 import {
   Plus, Settings, FileSpreadsheet, Upload, Search, ClipboardList,
   Trash2, Edit3, Eye, FileText, Moon, Sun, ShieldAlert,
-  CheckCircle, AlertTriangle, AlertOctagon, RefreshCw, BookOpen
+  CheckCircle, AlertTriangle, AlertOctagon, RefreshCw, BookOpen, LogOut,
+  Users
 } from "lucide-react";
 
 export default function App() {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthSession | null>(null);
+  const [isUsersOpen, setIsUsersOpen] = useState(false);
+  const isAdmin = currentUser?.perfil === 'administrador' || currentUser?.perfil === 'supervisor';
+
   const [reports, setReports] = useState<HVACReport[]>([]);
   const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
-  
+
   // Navigation states
   const [activeReport, setActiveReport] = useState<HVACReport | null>(null);
   const [viewingReport, setViewingReport] = useState<HVACReport | null>(null);
@@ -54,8 +65,27 @@ export default function App() {
     }
   }, [theme]);
 
-  // Load initial databases and drafts
+  // Check authentication on mount
   useEffect(() => {
+    async function checkAuth() {
+      try {
+        const session = await getSession();
+        if (session) {
+          setCurrentUser(session);
+          setIsAuthenticated(true);
+          console.log('[App] Session restored:', session.email, '|', session.perfil);
+        }
+      } catch (err) {
+        console.error('[App] Auth check error:', err);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  // Load initial databases and drafts (only when authenticated)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     async function loadInitialData() {
       const reportsList = await getReports();
       setReports(reportsList);
@@ -67,12 +97,33 @@ export default function App() {
       setServiceOrders(orders);
     }
     loadInitialData();
-  }, []);
+  }, [isAuthenticated]);
 
   // Theme support
   const toggleTheme = () => {
     setTheme(prev => prev === "light" ? "dark" : "light");
   };
+
+  // Handle login success
+  const handleLoginSuccess = (session: AuthSession) => {
+    setCurrentUser(session);
+    setIsAuthenticated(true);
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    if (window.confirm('¿Cerrar sesión?')) {
+      await logout();
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      console.log('[App] User logged out');
+    }
+  };
+
+  // If not authenticated, show login
+  if (!isAuthenticated) {
+    return <LoginComponent onLoginSuccess={handleLoginSuccess} />;
+  }
 
   // Create new report initializer
   const handleCreateNew = () => {
@@ -211,6 +262,24 @@ export default function App() {
 
           {/* Quick Menu Controls */}
           <div className="flex items-center gap-2">
+            {/* Botón instalar PWA (sólo aparece cuando el navegador lo permite) */}
+            <PWAHeaderInstallButton />
+
+            <OnlineIndicator />
+
+            {/* Avatar + nombre del usuario */}
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-slate-800/60 border border-slate-700/60 rounded-lg">
+              <div className="w-6 h-6 rounded-lg bg-violet-600/30 flex items-center justify-center text-[10px] font-black text-violet-300">
+                {currentUser?.nombre?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '??'}
+              </div>
+              <div className="leading-none">
+                <p className="text-[11px] font-bold text-zinc-200 truncate max-w-[100px]">
+                  {currentUser?.nombre?.split(' ')[0] || currentUser?.email}
+                </p>
+                <p className="text-[9px] text-zinc-500 capitalize">{currentUser?.perfil}</p>
+              </div>
+            </div>
+
             <button
               id="theme-toggle-btn"
               onClick={toggleTheme}
@@ -219,7 +288,7 @@ export default function App() {
             >
               {theme === "light" ? <Moon className="w-4.5 h-4.5" /> : <Sun className="w-4.5 h-4.5" />}
             </button>
-            
+
             <button
               id="open-manual-btn"
               onClick={() => setIsManualOpen(true)}
@@ -229,14 +298,34 @@ export default function App() {
               <BookOpen className="w-4.5 h-4.5" />
             </button>
 
+            {/* Gestión de usuarios (solo admin/supervisor) */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsUsersOpen(true)}
+                className="p-2 text-zinc-400 hover:text-violet-400 hover:bg-violet-950/20 rounded-lg transition"
+                title="Gestión de usuarios"
+              >
+                <Users className="w-4.5 h-4.5" />
+              </button>
+            )}
+
             <button
               id="open-admin-button"
               onClick={() => setIsAdminOpen(true)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 p-2 rounded-lg transition"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition"
               title="Configuración global del sistema"
             >
               <Settings className="w-4.5 h-4.5 text-zinc-400" />
               <span className="hidden sm:inline">Administrar</span>
+            </button>
+
+            <button
+              id="logout-btn"
+              onClick={handleLogout}
+              className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/20 rounded-lg transition"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-4.5 h-4.5" />
             </button>
 
             {!isFormOpen && !isServiceOrderFormOpen && (
@@ -775,6 +864,16 @@ export default function App() {
         </div>
       )}
 
+      {/* PWA Install Button (floating fallback) */}
+      <PWAInstallButton />
+
+      {/* Modal Gestión de Usuarios (solo administrador/supervisor) */}
+      {isUsersOpen && isAdmin && currentUser && (
+        <UsersModal
+          currentUserId={currentUser.userId}
+          onClose={() => setIsUsersOpen(false)}
+        />
+      )}
     </div>
   );
 }

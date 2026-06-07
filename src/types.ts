@@ -142,6 +142,51 @@ export interface EvidencePhoto {
   description: string;
 }
 
+// ============================================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================================
+export type UserProfile = 'administrador' | 'tecnico' | 'supervisor' | 'contratista';
+
+export interface AppUser {
+  id: string;
+  email: string;
+  nombre: string;
+  perfil: UserProfile;
+  pinHash: string;          // SHA-256 del PIN + salt
+  activo: boolean;
+  clienteId?: string;       // cliente asignado
+  sucursalIds?: string[];   // sucursales asignadas
+  avatarInitials?: string;  // 2 letras para el avatar
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export interface AuthSession {
+  userId: string;
+  email: string;
+  nombre: string;
+  perfil: UserProfile;
+  clienteId: string;
+  token: string;
+  expiresAt: string;
+}
+
+// ============================================================
+// ESTRUCTURA DE BASE DE DATOS LOCAL (LocalForage)
+// ============================================================
+export interface LocalDB {
+  // Colecciones principales
+  'hvac_reports': HVACReport[];
+  'hvac_service_orders': ServiceOrderReport[];
+  'hvac_admin_settings': AdminSettings;
+  // Autenticación
+  'app_users': AppUser[];
+  'auth_session': AuthSession | null;
+  // Metadatos
+  'db_version': number;
+  'last_sync': string;
+}
+
 export interface ServiceOrderReport {
   id: string;
   folio: string;

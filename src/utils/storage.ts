@@ -1,5 +1,5 @@
 import localforage from "localforage";
-import { HVACReport, AdminSettings, ServiceOrderReport } from "../types";
+import { HVACReport, AdminSettings, ServiceOrderReport, AppUser, AuthSession, UserProfile } from "../types";
 import { DEFAULT_ADMIN_SETTINGS } from "../constants";
 
 // Configure localForage
@@ -170,4 +170,148 @@ export async function deleteServiceOrder(id: string): Promise<ServiceOrderReport
     try { localStorage.setItem(SERVICE_ORDERS_KEY, JSON.stringify(updated)); } catch (_) {}
     return updated;
   }
+}
+
+// ============================================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================================
+const USERS_KEY = "app_users";
+const SESSION_KEY = "auth_session";
+const PIN_SALT = "nbyb-hvac-2026";
+const DB_VERSION = 1;
+
+/** Hash de 4 dígitos PIN usando Web Crypto API (SHA-256 + salt) */
+export async function hashPin(pin: string): Promise<string> {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pin + PIN_SALT);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    // Fallback sin Web Crypto (muy raro en browsers modernos)
+    return btoa(pin + PIN_SALT);
+  }
+}
+
+/** Verifica que el PIN ingresado coincide con el hash almacenado */
+export async function verifyPin(pin: string, storedHash: string): Promise<boolean> {
+  const hash = await hashPin(pin);
+  return hash === storedHash;
+}
+
+/** Usuarios por defecto (seed inicial) */
+async function buildDefaultUsers(): Promise<AppUser[]> {
+  const adminHash = await hashPin("3517");
+  const tecnicoHash = await hashPin("1234");
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "usr-001",
+      email: "admin@nbyb.cl",
+      nombre: "Administrador NBYB",
+      perfil: "administrador" as UserProfile,
+      pinHash: adminHash,
+      activo: true,
+      clienteId: "EECOL",
+      avatarInitials: "AN",
+      createdAt: now,
+    },
+    {
+      id: "usr-002",
+      email: "tecnico@nbyb.cl",
+      nombre: "Técnico Demo",
+      perfil: "tecnico" as UserProfile,
+      pinHash: tecnicoHash,
+      activo: true,
+      clienteId: "EECOL",
+      avatarInitials: "TD",
+      createdAt: now,
+    },
+  ];
+}
+
+/** Inicializa la DB de usuarios si está vacía */
+export async function initUsersDB(): Promise<void> {
+  const existing = await localforage.getItem<AppUser[]>(USERS_KEY);
+  const version = await localforage.getItem<number>("db_version");
+  if (!existing || existing.length === 0 || version !== DB_VERSION) {
+    const defaults = await buildDefaultUsers();
+    await localforage.setItem(USERS_KEY, defaults);
+    await localforage.setItem("db_version", DB_VERSION);
+    console.log("[DB] Usuarios inicializados:", defaults.length);
+  }
+}
+
+export async function getUsers(): Promise<AppUser[]> {
+  await initUsersDB();
+  const list = await localforage.getItem<AppUser[]>(USERS_KEY);
+  return list || [];
+}
+
+export async function getUserByEmail(email: string): Promise<AppUser | null> {
+  const users = await getUsers();
+  return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+}
+
+export async function saveUser(user: AppUser): Promise<AppUser[]> {
+  const list = await getUsers();
+  const idx = list.findIndex(u => u.id === user.id);
+  if (idx > -1) {
+    list[idx] = user;
+  } else {
+    list.push(user);
+  }
+  await localforage.setItem(USERS_KEY, list);
+  return list;
+}
+
+export async function deleteUser(id: string): Promise<AppUser[]> {
+  const list = await getUsers();
+  const updated = list.filter(u => u.id !== id);
+  await localforage.setItem(USERS_KEY, updated);
+  return updated;
+}
+
+export async function loginWithPin(email: string, pin: string): Promise<AuthSession | null> {
+  const user = await getUserByEmail(email);
+  if (!user || !user.activo) return null;
+
+  const ok = await verifyPin(pin, user.pinHash);
+  if (!ok) return null;
+
+  // Actualizar último login
+  user.lastLogin = new Date().toISOString();
+  await saveUser(user);
+
+  const session: AuthSession = {
+    userId: user.id,
+    email: user.email,
+    nombre: user.nombre,
+    perfil: user.perfil,
+    clienteId: user.clienteId || "",
+    token: `token_${user.id}_${Date.now()}`,
+    expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8h
+  };
+
+  await localforage.setItem(SESSION_KEY, session);
+  return session;
+}
+
+export async function getSession(): Promise<AuthSession | null> {
+  const session = await localforage.getItem<AuthSession>(SESSION_KEY);
+  if (!session) return null;
+  // Verificar expiración
+  if (new Date(session.expiresAt) < new Date()) {
+    await localforage.removeItem(SESSION_KEY);
+    return null;
+  }
+  return session;
+}
+
+export async function logout(): Promise<void> {
+  await localforage.removeItem(SESSION_KEY);
+  await localforage.removeItem("auth_email");
+  await localforage.removeItem("auth_tenant_id");
+  await localforage.removeItem("auth_token");
 }
