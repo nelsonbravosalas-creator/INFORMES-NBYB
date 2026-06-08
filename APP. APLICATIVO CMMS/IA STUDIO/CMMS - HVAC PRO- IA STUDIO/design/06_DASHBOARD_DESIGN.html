@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CMMS HVAC PRO v2.0 — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    /* ========================================================================
+       CMMS HVAC PRO – DESIGN SYSTEM v2.0
+       Reglas: BR-CICLO-001, BR-KPIS-001, BR-ACTIVOS-001, BR-ROLES-001
+       WF-003 (Iniciar), WF-004 (Cerrar)
+    ======================================================================== */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Paleta base */
+      --bg:    #070a0f;
+      --s1:    #0d1119;
+      --s2:    #111722;
+      --s3:    #17202e;
+      --bd:    #1a2236;
+      --bd2:   #263350;
+
+      /* Colores de acento */
+      --or:    #f97316;   /* naranja — acción primaria */
+      --cy:    #22d3ee;   /* cian — estado activo / en_progreso */
+      --gr:    #10b981;   /* verde — OK / cerrada / activo */
+      --am:    #f59e0b;   /* ámbar — advertencia / inactivo */
+      --re:    #ef4444;   /* rojo — crítico / baja */
+      --pu:    #a855f7;   /* púrpura — urgencia */
+
+      /* Textos */
+      --tx:    #e2e8f0;
+      --tx2:   #94a3b8;
+      --tx3:   #64748b;
+
+      /* Tipografía */
+      --ff-d:  'Barlow Condensed', sans-serif;
+      --ff-m:  'JetBrains Mono', monospace;
+
+      /* Layout */
+      --sw:    228px;
+      --th:    54px;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg);
+      color: var(--tx); font-family: var(--ff-d);
+      font-size: 14px; line-height: 1.4;
+    }
+
+    /* ===== SHELL ===== */
+    .shell { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: var(--sw); min-width: var(--sw);
+      background: var(--s1); border-right: 1px solid var(--bd);
+      display: flex; flex-direction: column;
+    }
+    .logo {
+      padding: 16px 20px; border-bottom: 1px solid var(--bd);
+      font-size: 21px; font-weight: 900; letter-spacing: .05em;
+      color: var(--or); user-select: none;
+    }
+    .logo em { color: var(--cy); font-style: normal; }
+    .logo sub { font-size: 10px; color: var(--tx3); font-family: var(--ff-m); vertical-align: sub; }
+
+    .nav { flex: 1; padding: 8px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 20px; border: none; background: none;
+      font-family: var(--ff-d); font-size: 13px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--tx3); cursor: pointer;
+      transition: color .15s, background .15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { color: var(--tx); background: var(--s2); }
+    .nav-item.active {
+      color: var(--or); background: var(--s2); border-left-color: var(--or);
+    }
+    .nav-icon { font-size: 17px; }
+
+    .sidebar-footer {
+      padding: 14px 20px; border-top: 1px solid var(--bd);
+    }
+    .user-name { font-weight: 700; font-size: 13px; color: var(--tx2); }
+    .user-role {
+      display: inline-block; margin-top: 5px; padding: 2px 8px;
+      background: var(--s3); border-radius: 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--cy);
+    }
+    .logout-btn {
+      margin-top: 8px; padding: 5px 12px;
+      border: 1px solid var(--bd2); border-radius: 4px; background: none;
+      color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--ff-d);
+      transition: all .15s;
+    }
+    .logout-btn:hover { border-color: var(--re); color: var(--re); }
+
+    /* ===== MAIN AREA ===== */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .topbar {
+      height: var(--th); min-height: var(--th);
+      background: var(--s1); border-bottom: 1px solid var(--bd);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+    }
+    .topbar-title {
+      font-size: 18px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 20px; }
+    .clock { font-family: var(--ff-m); font-size: 14px; color: var(--cy); }
+    .online-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700; color: var(--gr);
+    }
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--gr);
+      animation: pulse-g 2s infinite;
+    }
+    @keyframes pulse-g { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* ===== SECCIONES (tabs) ===== */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ===== KPI GRID (BR-KPIS-001) ===== */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--s1); border: 1px solid var(--bd); border-radius: 8px;
+      padding: 16px; display: flex; flex-direction: column; align-items: center;
+      gap: 8px; cursor: help; transition: border-color .2s, transform .2s;
+    }
+    .kpi-card:hover { border-color: var(--bd2); transform: translateY(-1px); }
+    .kpi-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--tx3); text-align: center;
+    }
+    .kpi-formula {
+      font-size: 9px; font-family: var(--ff-m); color: var(--tx3);
+      text-align: center; margin-top: -4px;
+    }
+
+    /* SVG Gauge Ring  (C = 2π×26 = 163.4) */
+    .ring-track  { fill: none; stroke: var(--bd); stroke-width: 6; }
+    .ring-fill   { fill: none; stroke-width: 6; stroke-linecap: round;
+                   transition: stroke-dasharray 1.2s ease; }
+
+    /* ===== PANEL / SECCIÓN ===== */
+    .panel { background: var(--s1); border: 1px solid var(--bd); border-radius: 8px; margin-bottom: 24px; }
+    .panel-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--bd);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title {
+      font-size: 12px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--tx2);
+    }
+    .br-tag {
+      font-size: 9px; font-weight: 700; letter-spacing: .04em;
+      color: var(--tx3); font-family: var(--ff-m);
+    }
+
+    /* ===== KPI STATS ROW ===== */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .stat-cell {
+      padding: 14px 20px; border-right: 1px solid var(--bd);
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-num  { font-size: 26px; font-weight: 900; color: var(--tx); }
+    .stat-desc { font-size: 11px; color: var(--tx3); margin-top: 2px; }
+    .stat-note { font-size: 10px; color: var(--bd2); margin-top: 2px; font-family: var(--ff-m); }
+
+    /* ===== OT CARDS ===== */
+    .ot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; padding: 14px; }
+    .ot-card {
+      background: var(--s2); border: 1px solid var(--bd); border-radius: 8px;
+      padding: 14px; display: flex; flex-direction: column; gap: 9px;
+      transition: border-color .2s;
+    }
+    .ot-card:hover { border-color: var(--bd2); }
+
+    .ot-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .ot-folio  { font-family: var(--ff-m); font-size: 12px; color: var(--or); font-weight: 700; }
+    .ot-tipo   {
+      margin-left: 8px; padding: 1px 6px; border-radius: 4px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      background: var(--s3); color: var(--tx3);
+    }
+
+    /* BR-CICLO-001: colores de estado OT */
+    .ot-estado {
+      padding: 2px 9px; border-radius: 12px; font-size: 10px; font-weight: 900;
+      letter-spacing: .05em; text-transform: uppercase; border: 1px solid;
+    }
+    .estado-abierta     { color: #f59e0b; border-color: #f59e0b; }
+    .estado-en_progreso { color: #22d3ee; border-color: #22d3ee; }
+    .estado-cerrada     { color: #10b981; border-color: #10b981; }
+
+    .ot-desc { font-size: 12px; color: var(--tx2); line-height: 1.45; }
+
+    .ot-meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .prioridad-badge { font-size: 11px; font-weight: 700; }
+    .pr-critica { color: #ef4444; }
+    .pr-alta    { color: #f97316; }
+    .pr-media   { color: #f59e0b; }
+    .pr-baja    { color: #10b981; }
+    .ot-sync-pending { font-size: 10px; color: var(--am); font-family: var(--ff-m); }
+
+    /* Botones de acción OT (WF-003 / WF-004) */
+    .ot-actions { display: flex; gap: 8px; margin-top: 2px; }
+    .btn-ot {
+      flex: 1; padding: 7px 12px; border: none; border-radius: 5px;
+      font-size: 11px; font-weight: 900; letter-spacing: .05em; cursor: pointer;
+      font-family: var(--ff-d); transition: opacity .2s, transform .15s;
+    }
+    .btn-ot:hover { opacity: .85; transform: translateY(-1px); }
+    /* WF-003 */
+    .btn-iniciar { background: var(--cy); color: #0d1119; }
+    /* WF-004 */
+    .btn-cerrar  { background: var(--or); color: #0d1119; }
+
+    /* ===== TABLA EQUIPOS (BR-ACTIVOS-001) ===== */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--tx3); padding: 8px 16px; text-align: left;
+      border-bottom: 1px solid var(--bd); white-space: nowrap;
+    }
+    td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--bd); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--s2); }
+
+    /* Status dots — BR-ACTIVOS-001: 3 estados */
+    .sdot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 7px; vertical-align: middle;
+    }
+    .sdot-activo   { background: var(--gr); box-shadow: 0 0 7px var(--gr); animation: pulse-g 2s infinite; }
+    .sdot-inactivo { background: var(--am); box-shadow: 0 0 7px var(--am); animation: pulse-a 2s infinite; }
+    .sdot-baja     { background: var(--re); }
+    @keyframes pulse-a { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .est-activo   { color: var(--gr); font-weight: 700; font-size: 11px; }
+    .est-inactivo { color: var(--am); font-weight: 700; font-size: 11px; }
+    .est-baja     { color: var(--re); font-weight: 700; font-size: 11px; text-decoration: line-through; }
+
+    /* Tags */
+    .tag {
+      padding: 2px 7px; border-radius: 12px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .tag-critico  { background:#3f1212; color:#f87171; border:1px solid #7f1d1d; }
+    .tag-alto-uso { background:#3f2c12; color:#fbbf24; border:1px solid #78350f; }
+    .tag-bajo-uso { background:#0f2b1e; color:#34d399; border:1px solid #064e3b; }
+    .tag-obsoleto { background:#1e1e1e; color:#9ca3af; border:1px solid #374151; }
+    .tag-nuevo    { background:#0f1f3f; color:#60a5fa; border:1px solid #1e3a5f; }
+
+    /* Botón NuevaOT en tabla equipos */
+    .btn-nueva-ot {
+      padding: 5px 13px; border: none; border-radius: 4px;
+      font-size: 11px; font-weight: 900; cursor: pointer;
+      font-family: var(--ff-d); transition: all .15s;
+    }
+    .btn-nueva-ot.disponible { background: var(--or); color: #0d1119; }
+    .btn-nueva-ot.disponible:hover { opacity: .85; }
+    .btn-nueva-ot.bloqueado  { background: var(--s3); color: var(--tx3); cursor: not-allowed; }
+
+    /* ===== MODAL (WF-004) ===== */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(7,10,15,.88); z-index: 999;
+      align-items: center; justify-content: center;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      background: var(--s2); border: 1px solid var(--bd2); border-radius: 10px;
+      padding: 24px; width: 380px; max-width: 95vw;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .modal-title { font-size: 16px; font-weight: 900; letter-spacing: .04em; color: var(--or); }
+    .modal-info  { background: var(--s3); border-radius: 6px; padding: 10px; }
+    .fld-label {
+      display: block; font-size: 10px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--tx3); margin-bottom: 4px;
+    }
+    .fld-input {
+      width: 100%; padding: 8px 10px;
+      background: var(--s1); border: 1px solid var(--bd2); border-radius: 5px;
+      color: var(--tx); font-size: 13px; font-family: var(--ff-d); outline: none;
+    }
+    .fld-input:focus { border-color: var(--or); }
+    .modal-error { font-size: 12px; color: var(--re); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .btn-ghost {
+      padding: 7px 14px; border: 1px solid var(--bd2); border-radius: 5px;
+      background: none; color: var(--tx3); font-size: 12px; cursor: pointer;
+      font-family: var(--ff-d); font-weight: 700; letter-spacing: .04em; transition: all .15s;
+    }
+    .btn-ghost:hover { border-color: var(--tx3); color: var(--tx); }
+    .btn-primary {
+      flex: 1; padding: 8px 16px; border: none; border-radius: 5px;
+      background: var(--or); color: #0d1119;
+      font-size: 12px; font-weight: 900; cursor: pointer;
+      font-family: var(--ff-d); letter-spacing: .04em; transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: .85; }
+
+    /* Canvas de firma */
+    #sig-canvas {
+      display: block; border: 1px solid var(--bd2); border-radius: 4px;
+      cursor: crosshair; background: var(--s1); width: 100%; height: 90px;
+    }
+    #sig-status { font-size: 11px; color: var(--tx3); margin-top: 4px; }
+
+    /* ===== TOAST ===== */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      padding: 10px 18px; border-radius: 6px;
+      font-size: 13px; font-weight: 700; font-family: var(--ff-d);
+      animation: slideIn .25s ease;
+    }
+    .toast.success { background: var(--gr); color: #0d1119; }
+    .toast.error   { background: var(--re); color: white; }
+    .toast.info    { background: var(--cy); color: #0d1119; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ===== RULE LEGEND ===== */
+    .rule-legend {
+      display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px;
+      border-top: 1px solid var(--bd); align-items: center;
+    }
+    .rule-item { font-size: 10px; font-family: var(--ff-m); color: var(--tx3); }
+    .rule-item b { color: var(--tx2); }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="logo">
+      CMMS<em>·</em>HVAC <em>PRO</em>
+      <sub>v2.0</sub>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" onclick="showSection('dashboard', this)">
+        <span class="nav-icon">◈</span> Dashboard
+      </button>
+      <button class="nav-item" onclick="showSection('ordenes', this)">
+        <span class="nav-icon">⊞</span> Órdenes de Trabajo
+      </button>
+      <button class="nav-item" onclick="showSection('equipos', this)">
+        <span class="nav-icon">⊡</span> Equipos / Activos
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <p class="user-name">Nelson Bravo S.</p>
+      <span class="user-role">admin</span><br>
+      <button class="logout-btn" onclick="showToast('Sesión cerrada', 'info')">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <span class="topbar-title" id="topbar-title">Dashboard KPIs</span>
+      <div class="topbar-right">
+        <span class="online-badge">
+          <span class="pulse-dot"></span> EN LÍNEA
+        </span>
+        <span class="clock" id="clock">--:--:--</span>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="content">
+
+      <!-- ===================== DASHBOARD ===================== -->
+      <section id="sec-dashboard" class="section active">
+
+        <!-- KPI GRID — BR-KPIS-001 -->
+        <div class="kpi-grid">
+
+          <!-- MTBF -->
+          <div class="kpi-card" title="MTBF = 720 / COUNT(OTs correctivas cerradas) — BR-KPIS-001">
+            <svg width="72" height="72" viewBox="0 0 60 60">
+              <circle class="ring-track" cx="30" cy="30" r="26"/>
+              <circle id="ring-mtbf" class="ring-fill" cx="30" cy="30" r="26"
+                stroke="#10b981"
+                stroke-dasharray="0 163.4"
+                stroke-dashoffset="40.85"
+                transform="rotate(-90 30 30)"/>
+              <text x="30" y="32" text-anchor="middle"
+                font-family="'Barlow Condensed'" font-size="11" font-weight="700" fill="#e2e8f0">
+                240h
+              </text>
+              <text x="30" y="43" text-anchor="middle"
+                font-family="'JetBrains Mono'" font-size="7" fill="#64748b">
+                EXCELENTE
+              </text>
+            </svg>
+            <p class="kpi-label">MTBF</p>
+            <p class="kpi-formula">720 / fallos</p>
+          </div>
+
+          <!-- MTTR -->
+          <div class="kpi-card" title="MTTR = AVG(fecha_cierre - fecha_inicio) / 3600 — BR-KPIS-001">
+            <svg width="72" height="72" viewBox="0 0 60 60">
+              <circle class="ring-track" cx="30" cy="30" r="26"/>
+              <circle id="ring-mttr" class="ring-fill" cx="30" cy="30" r="26"
+                stroke="#22d3ee"
+                stroke-dasharray="0 163.4"
+                stroke-dashoffset="40.85"
+                transform="rotate(-90 30 30)"/>
+              <text x="30" y="32" text-anchor="middle"
+                font-family="'Barlow Condensed'" font-size="11" font-weight="700" fill="#e2e8f0">
+                1.8h
+              </text>
+              <text x="30" y="43" text-anchor="middle"
+                font-family="'JetBrains Mono'" font-size="7" fill="#64748b">
+                EXCELENTE
+              </text>
+            </svg>
+            <p class="kpi-label">MTTR</p>
+            <p class="kpi-formula">AVG(dur)/3600</p>
+          </div>
+
+          <!-- DISPONIBILIDAD -->
+          <div class="kpi-card" title="Disponibilidad = (1 - MTTR/720) × 100 — BR-KPIS-001">
+            <svg width="72" height="72" viewBox="0 0 60 60">
+              <circle class="ring-track" cx="30" cy="30" r="26"/>
+              <circle id="ring-disp" class="ring-fill" cx="30" cy="30" r="26"
+                stroke="#f97316"
+                stroke-dasharray="0 163.4"
+                stroke-dashoffset="40.85"
+                transform="rotate(-90 30 30)"/>
+              <text x="30" y="32" text-anchor="middle"
+                font-family="'Barlow Condensed'" font-size="11" font-weight="700" fill="#e2e8f0">
+                99.7%
+              </text>
+              <text x="30" y="43" text-anchor="middle"
+                font-family="'JetBrains Mono'" font-size="7" fill="#64748b">
+                EXCELENTE
+              </text>
+            </svg>
+            <p class="kpi-label">Disponibilidad</p>
+            <p class="kpi-formula">(1-MTTR/720)×100</p>
+          </div>
+
+          <!-- OTs CERRADAS -->
+          <div class="kpi-card" title="Órdenes cerradas vs total del período">
+            <svg width="72" height="72" viewBox="0 0 60 60">
+              <circle class="ring-track" cx="30" cy="30" r="26"/>
+              <circle id="ring-ots" class="ring-fill" cx="30" cy="30" r="26"
+                stroke="#f59e0b"
+                stroke-dasharray="0 163.4"
+                stroke-dashoffset="40.85"
+                transform="rotate(-90 30 30)"/>
+              <text x="30" y="32" text-anchor="middle"
+                font-family="'Barlow Condensed'" font-size="11" font-weight="700" fill="#e2e8f0">
+                2/4
+              </text>
+              <text x="30" y="43" text-anchor="middle"
+                font-family="'JetBrains Mono'" font-size="7" fill="#64748b">
+                BUENO
+              </text>
+            </svg>
+            <p class="kpi-label">OTs Cerradas</p>
+            <p class="kpi-formula">cerradas/total</p>
+          </div>
+
+        </div><!-- /.kpi-grid -->
+
+        <!-- Stats row -->
+        <div class="panel" style="margin-bottom:24px">
+          <div class="panel-header">
+            <span class="panel-title">Resumen últimos 30 días</span>
+            <span class="br-tag">BR-KPIS-001</span>
+          </div>
+          <div class="stats-row">
+            <div class="stat-cell">
+              <p class="stat-num">3</p>
+              <p class="stat-desc">OTs Correctivas (fallos)</p>
+              <p class="stat-note">Denominador de MTBF</p>
+            </div>
+            <div class="stat-cell">
+              <p class="stat-num">2</p>
+              <p class="stat-desc">OTs Preventivas</p>
+              <p class="stat-note">No cuentan como fallo</p>
+            </div>
+            <div class="stat-cell">
+              <p class="stat-num">5</p>
+              <p class="stat-desc">Total OTs período</p>
+              <p class="stat-note">Todas las tipologías</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- OTs activas -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">OTs Activas</span>
+            <span class="br-tag">BR-CICLO-001</span>
+          </div>
+          <div class="ot-grid">
+
+            <!-- OT abierta → "Iniciar Trabajo" (WF-003) -->
+            <div class="ot-card">
+              <div class="ot-header">
+                <div>
+                  <span class="ot-folio">OT-2026-06-00001</span>
+                  <span class="ot-tipo">correctivo</span>
+                </div>
+                <span class="ot-estado estado-abierta">ABIERTA</span>
+              </div>
+              <p class="ot-desc">Fuga de refrigerante detectada en condensador principal del Chiller Trane</p>
+              <div class="ot-meta">
+                <span class="prioridad-badge pr-critica">▲ CRÍTICA</span>
+                <span style="font-size:11px;color:var(--tx3)">act-001 · Chiller</span>
+              </div>
+              <!-- WF-003: transición abierta → en_progreso -->
+              <div class="ot-actions">
+                <button class="btn-ot btn-iniciar" onclick="iniciarOT('ot-001', this)">
+                  ▶ INICIAR TRABAJO
+                </button>
+              </div>
+            </div>
+
+            <!-- OT en_progreso → "Cerrar" (WF-004) -->
+            <div class="ot-card">
+              <div class="ot-header">
+                <div>
+                  <span class="ot-folio">OT-2026-06-00002</span>
+                  <span class="ot-tipo">preventivo</span>
+                </div>
+                <span class="ot-estado estado-en_progreso">EN PROGRESO</span>
+              </div>
+              <p class="ot-desc">Mantenimiento preventivo trimestral de filtros y bobinas — Fan Coil Carrier</p>
+              <div class="ot-meta">
+                <span class="prioridad-badge pr-media">▲ MEDIA</span>
+                <span style="font-size:11px;color:var(--tx3)">⏱ 3.0h en curso</span>
+                <span class="ot-sync-pending">⟳ PENDIENTE</span>
+              </div>
+              <!-- WF-004: transición en_progreso → cerrada -->
+              <div class="ot-actions">
+                <button class="btn-ot btn-cerrar" onclick="openCerrarModal('ot-002','OT-2026-06-00002','Mantenimiento preventivo trimestral de filtros y bobinas')">
+                  ✓ FINALIZAR Y CERRAR
+                </button>
+              </div>
+            </div>
+
+          </div><!-- /.ot-grid -->
+
+          <!-- Leyenda de reglas -->
+          <div class="rule-legend">
+            <span class="rule-item"><b>BR-CICLO-001</b> abierta→en_progreso→cerrada (sin reversal)</span>
+            <span class="rule-item"><b>WF-003</b> Iniciar: fecha_inicio=NOW()</span>
+            <span class="rule-item"><b>WF-004</b> Cerrar: firma + horas obligatorios</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ===================== ÓRDENES ===================== -->
+      <section id="sec-ordenes" class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 style="font-size:16px;font-weight:900;letter-spacing:.04em">Todas las Órdenes</h2>
+          <span class="br-tag">BR-CICLO-001 activo — transiciones solo hacia adelante</span>
+        </div>
+        <div class="ot-grid">
+
+          <div class="ot-card">
+            <div class="ot-header">
+              <div>
+                <span class="ot-folio">OT-2026-06-00001</span>
+                <span class="ot-tipo">correctivo</span>
+              </div>
+              <span class="ot-estado estado-abierta">ABIERTA</span>
+            </div>
+            <p class="ot-desc">Fuga de refrigerante detectada en condensador principal</p>
+            <div class="ot-meta">
+              <span class="prioridad-badge pr-critica">▲ CRÍTICA</span>
+            </div>
+            <div class="ot-actions">
+              <button class="btn-ot btn-iniciar" onclick="iniciarOT('ot-001', this)">▶ INICIAR TRABAJO</button>
+            </div>
+          </div>
+
+          <div class="ot-card">
+            <div class="ot-header">
+              <div>
+                <span class="ot-folio">OT-2026-06-00002</span>
+                <span class="ot-tipo">preventivo</span>
+              </div>
+              <span class="ot-estado estado-en_progreso">EN PROGRESO</span>
+            </div>
+            <p class="ot-desc">Mantenimiento preventivo trimestral de filtros y bobinas</p>
+            <div class="ot-meta">
+              <span class="prioridad-badge pr-media">▲ MEDIA</span>
+              <span style="font-size:11px;color:var(--tx3)">⏱ 3.0h en curso</span>
+              <span class="ot-sync-pending">⟳ PENDIENTE</span>
+            </div>
+            <div class="ot-actions">
+              <button class="btn-ot btn-cerrar" onclick="openCerrarModal('ot-002','OT-2026-06-00002','Mantenimiento preventivo trimestral de filtros y bobinas')">✓ FINALIZAR Y CERRAR</button>
+            </div>
+          </div>
+
+          <div class="ot-card">
+            <div class="ot-header">
+              <div>
+                <span class="ot-folio">OT-2026-06-00003</span>
+                <span class="ot-tipo">preventivo</span>
+              </div>
+              <span class="ot-estado estado-cerrada">CERRADA</span>
+            </div>
+            <p class="ot-desc">Revisión anual sistema VRV y calibración de controladores</p>
+            <div class="ot-meta">
+              <span class="prioridad-badge pr-baja">▲ BAJA</span>
+              <span style="font-size:11px;color:var(--tx3)">⏱ 2.5h · Cerrada 01/06</span>
+            </div>
+            <!-- Estado cerrada → sin botones (BR-CICLO-001 terminal) -->
+          </div>
+
+          <div class="ot-card">
+            <div class="ot-header">
+              <div>
+                <span class="ot-folio">OT-2026-05-00042</span>
+                <span class="ot-tipo">correctivo</span>
+              </div>
+              <span class="ot-estado estado-cerrada">CERRADA</span>
+            </div>
+            <p class="ot-desc">Reemplazo de compresor secundario por falla mecánica</p>
+            <div class="ot-meta">
+              <span class="prioridad-badge pr-alta">▲ ALTA</span>
+              <span style="font-size:11px;color:var(--tx3)">⏱ 6.0h · Cerrada 15/05</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===================== EQUIPOS ===================== -->
+      <section id="sec-equipos" class="section">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Activos / Equipos HVAC</span>
+            <span class="br-tag">BR-ACTIVOS-001 — baja bloquea nueva OT</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Equipo</th>
+                <th>Tipo</th>
+                <th>Serial</th>
+                <th>Tag</th>
+                <th>Última Revisión</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- activo → puede recibir OT -->
+              <tr>
+                <td>
+                  <span class="sdot sdot-activo"></span>
+                  <span class="est-activo">ACTIVO</span>
+                </td>
+                <td>
+                  <p style="font-weight:700">Chiller Trane CenTraVac 19XL</p>
+                  <p style="font-size:11px;color:var(--tx3)">Trane</p>
+                </td>
+                <td style="text-transform:uppercase;font-size:12px;color:var(--tx3)">chiller</td>
+                <td style="font-family:var(--ff-m);font-size:11px">CH-001</td>
+                <td><span class="tag tag-critico">critico</span></td>
+                <td style="font-size:12px;color:var(--tx3)">15/05/2026</td>
+                <td>
+                  <button class="btn-nueva-ot disponible"
+                    onclick="showToast('Nueva OT para Chiller Trane — folio OT-2026-06-XXXXX', 'success')">
+                    + OT
+                  </button>
+                </td>
+              </tr>
+
+              <!-- activo → puede recibir OT -->
+              <tr>
+                <td>
+                  <span class="sdot sdot-activo"></span>
+                  <span class="est-activo">ACTIVO</span>
+                </td>
+                <td>
+                  <p style="font-weight:700">Fan Coil Carrier 42XW</p>
+                  <p style="font-size:11px;color:var(--tx3)">Carrier</p>
+                </td>
+                <td style="text-transform:uppercase;font-size:12px;color:var(--tx3)">fancoil</td>
+                <td style="font-family:var(--ff-m);font-size:11px">FC-002</td>
+                <td><span class="tag tag-alto-uso">alto-uso</span></td>
+                <td style="font-size:12px;color:var(--tx3)">20/05/2026</td>
+                <td>
+                  <button class="btn-nueva-ot disponible"
+                    onclick="showToast('Nueva OT para Fan Coil Carrier — folio OT-2026-06-XXXXX', 'success')">
+                    + OT
+                  </button>
+                </td>
+              </tr>
+
+              <!-- inactivo → puede recibir OT (pero con advertencia) -->
+              <tr>
+                <td>
+                  <span class="sdot sdot-inactivo"></span>
+                  <span class="est-inactivo">INACTIVO</span>
+                </td>
+                <td>
+                  <p style="font-weight:700">UTA Lennox LGA</p>
+                  <p style="font-size:11px;color:var(--tx3)">Lennox</p>
+                </td>
+                <td style="text-transform:uppercase;font-size:12px;color:var(--tx3)">uta</td>
+                <td style="font-family:var(--ff-m);font-size:11px">UTA-003</td>
+                <td><span class="tag tag-critico">critico</span></td>
+                <td style="font-size:12px;color:var(--tx3)">10/04/2026</td>
+                <td>
+                  <!-- inactivo: puede recibir OT, pero marcado diferente -->
+                  <button class="btn-nueva-ot disponible"
+                    onclick="showToast('Nueva OT para UTA Lennox (equipo inactivo)', 'info')"
+                    style="background:var(--am);color:#0d1119">
+                    + OT
+                  </button>
+                </td>
+              </tr>
+
+              <!-- BAJA → BR-ACTIVOS-001: bloqueado -->
+              <tr style="opacity:.65">
+                <td>
+                  <span class="sdot sdot-baja"></span>
+                  <span class="est-baja">BAJA</span>
+                </td>
+                <td>
+                  <p style="font-weight:700;text-decoration:line-through;color:var(--tx3)">Split Daikin FTXB</p>
+                  <p style="font-size:11px;color:var(--tx3)">Daikin</p>
+                </td>
+                <td style="text-transform:uppercase;font-size:12px;color:var(--tx3)">split</td>
+                <td style="font-family:var(--ff-m);font-size:11px;color:var(--tx3)">SP-004</td>
+                <td><span class="tag tag-bajo-uso">bajo-uso</span></td>
+                <td style="font-size:12px;color:var(--tx3)">01/03/2026</td>
+                <td>
+                  <!-- BR-ACTIVOS-001: NO puede recibir OT -->
+                  <button
+                    class="btn-nueva-ot bloqueado"
+                    disabled
+                    title="Equipo en BAJA — no puede recibir nuevas OTs (BR-ACTIVOS-001)">
+                    ⊘ BAJA
+                  </button>
+                </td>
+              </tr>
+
+              <!-- activo VRV -->
+              <tr>
+                <td>
+                  <span class="sdot sdot-activo"></span>
+                  <span class="est-activo">ACTIVO</span>
+                </td>
+                <td>
+                  <p style="font-weight:700">VRV Mitsubishi City Multi</p>
+                  <p style="font-size:11px;color:var(--tx3)">Mitsubishi</p>
+                </td>
+                <td style="text-transform:uppercase;font-size:12px;color:var(--tx3)">vrv</td>
+                <td style="font-family:var(--ff-m);font-size:11px">VRV-005</td>
+                <td><span class="tag tag-nuevo">nuevo</span></td>
+                <td style="font-size:12px;color:var(--tx3)">01/06/2026</td>
+                <td>
+                  <button class="btn-nueva-ot disponible"
+                    onclick="showToast('Nueva OT para VRV Mitsubishi — folio OT-2026-06-XXXXX', 'success')">
+                    + OT
+                  </button>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+
+          <div class="rule-legend">
+            <span class="rule-item">
+              <span class="sdot sdot-activo" style="margin-right:4px"></span>
+              <b>activo</b> — puede recibir OTs
+            </span>
+            <span class="rule-item">
+              <span class="sdot sdot-inactivo" style="margin-right:4px"></span>
+              <b>inactivo</b> — puede recibir OTs (con aviso)
+            </span>
+            <span class="rule-item">
+              <span class="sdot sdot-baja" style="margin-right:4px"></span>
+              <b>baja</b> — <u>bloqueado</u>, error 400 (BR-ACTIVOS-001)
+            </span>
+          </div>
+
+        </div>
+      </section>
+
+    </main><!-- /.content -->
+  </div><!-- /.main -->
+</div><!-- /.shell -->
+
+<!-- ===== MODAL CERRAR OT (WF-004) ===== -->
+<div id="cerrar-modal" class="overlay">
+  <div class="modal">
+    <h3 class="modal-title">Cerrar Orden de Trabajo</h3>
+    <div class="modal-info">
+      <span class="ot-folio" id="modal-folio">OT-2026-06-00000</span>
+      <p style="font-size:12px;color:var(--tx3);margin-top:5px" id="modal-desc"></p>
+    </div>
+
+    <div id="modal-error" class="modal-error" style="display:none"></div>
+
+    <label class="fld-label">Horas Ejecutadas * (BR-STD-001)</label>
+    <input type="number" id="modal-horas" class="fld-input"
+      step="0.5" min="0.5" placeholder="Ej: 2.5" />
+
+    <label class="fld-label">Notas Finales</label>
+    <textarea id="modal-notas" class="fld-input" rows="2"
+      placeholder="Trabajo realizado, materiales usados..."></textarea>
+
+    <label class="fld-label">Firma Digital * (BR-STD-001)</label>
+    <canvas id="sig-canvas" width="332" height="90"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <button class="btn-ghost" onclick="clearSig()" type="button">Limpiar</button>
+      <span id="sig-status">Dibuja tu firma</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeCerrarModal()">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarCierre()">Confirmar Cierre</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCRIPTS ===== -->
+<script>
+  // ========== RELOJ ==========
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('es-CL');
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ========== NAV ==========
+  const TITLES = {
+    dashboard: 'Dashboard KPIs',
+    ordenes:   'Órdenes de Trabajo',
+    equipos:   'Equipos / Activos',
+  };
+
+  function showSection(id, btn) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.add('active');
+    if (btn) btn.classList.add('active');
+    document.getElementById('topbar-title').textContent = TITLES[id] || id;
+  }
+
+  // ========== KPI RINGS (BR-KPIS-001) ==========
+  // C = 2π×26 = 163.362...
+  const C = 163.4;
+
+  function setRing(id, pct, delay) {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const filled = (pct / 100) * C;
+      el.style.strokeDasharray = `${filled} ${C - filled}`;
+    }, delay || 100);
+  }
+
+  // Valores de ejemplo:
+  // MTBF = 720 / 3 = 240h  →  meta 500h  →  pct = min(100, 240/500*100) = 48%
+  // MTTR = 1.8h  →  meta <2h  →  pct = max(0, 100 - (1.8/12)*100) = 85%
+  // Disponibilidad = (1 - 1.8/720)*100 = 99.75%  →  pct = 99.75
+  // OTs cerradas = 2/4 = 50%
+
+  window.addEventListener('DOMContentLoaded', () => {
+    setRing('ring-mtbf', 48, 300);
+    setRing('ring-mttr', 85, 450);
+    setRing('ring-disp', 99.7, 600);
+    setRing('ring-ots',  50, 750);
+  });
+
+  // ========== WF-003: INICIAR TRABAJO ==========
+  function iniciarOT(otId, btn) {
+    const card = btn.closest('.ot-card');
+    const badge = card.querySelector('.ot-estado');
+
+    // BR-CICLO-001: abierta → en_progreso
+    badge.className = 'ot-estado estado-en_progreso';
+    badge.textContent = 'EN PROGRESO';
+
+    // fecha_inicio = NOW() (Dexie update synced=false)
+    const ahora = new Date().toLocaleTimeString('es-CL');
+
+    // Actualizar botón → WF-004
+    btn.className = 'btn-ot btn-cerrar';
+    btn.textContent = '✓ FINALIZAR Y CERRAR';
+    btn.setAttribute('onclick', `openCerrarModal('${otId}','(folio)','(desc)')`);
+
+    card.querySelector('.ot-meta').innerHTML +=
+      `<span style="font-size:11px;color:var(--cy)">▶ Iniciado ${ahora}</span>
+       <span class="ot-sync-pending">⟳ PENDIENTE</span>`;
+
+    showToast('WF-003: OT iniciada — estado=en_progreso, fecha_inicio=NOW()', 'info');
+  }
+
+  // ========== WF-004: CERRAR OT ==========
+  let currentOTId = null;
+  let sigData = null;
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+  let ctx = null;
+
+  function openCerrarModal(otId, folio, desc) {
+    currentOTId = otId;
+    document.getElementById('modal-folio').textContent = folio;
+    document.getElementById('modal-desc').textContent = desc;
+    document.getElementById('modal-horas').value = '';
+    document.getElementById('modal-notas').value = '';
+    document.getElementById('modal-error').style.display = 'none';
+    clearSig();
+    document.getElementById('cerrar-modal').classList.add('open');
+  }
+
+  function closeCerrarModal() {
+    document.getElementById('cerrar-modal').classList.remove('open');
+    currentOTId = null;
+  }
+
+  function confirmarCierre() {
+    const horas = parseFloat(document.getElementById('modal-horas').value);
+    const errEl = document.getElementById('modal-error');
+
+    if (!horas || horas <= 0) {
+      errEl.textContent = 'Horas ejecutadas debe ser mayor a 0 (BR-STD-001)';
+      errEl.style.display = 'block'; return;
+    }
+    if (!sigData) {
+      errEl.textContent = 'Firma digital es obligatoria (BR-STD-001)';
+      errEl.style.display = 'block'; return;
+    }
+
+    // BR-CICLO-001: en_progreso → cerrada
+    closeCerrarModal();
+    showToast(`WF-004: OT cerrada — ${horas}h · firma capturada · fecha_cierre=NOW()`, 'success');
+
+    // Actualizar tarjeta visual (si existe en DOM)
+    const cards = document.querySelectorAll('.ot-card');
+    cards.forEach(card => {
+      const badge = card.querySelector('.ot-estado');
+      if (badge && badge.textContent === 'EN PROGRESO') {
+        badge.className = 'ot-estado estado-cerrada';
+        badge.textContent = 'CERRADA';
+        const actions = card.querySelector('.ot-actions');
+        if (actions) actions.remove();
+      }
+    });
+  }
+
+  // ========== FIRMA DIGITAL ==========
+  window.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
+    ctx = canvas.getContext('2d');
+    resetCanvas();
+
+    canvas.addEventListener('mousedown', e => {
+      drawing = true;
+      const r = canvas.getBoundingClientRect();
+      lastX = (e.clientX - r.left) * (canvas.width / r.width);
+      lastY = (e.clientY - r.top)  * (canvas.height / r.height);
+    });
+    canvas.addEventListener('mousemove', e => {
+      if (!drawing) return;
+      const r = canvas.getBoundingClientRect();
+      const x = (e.clientX - r.left) * (canvas.width / r.width);
+      const y = (e.clientY - r.top)  * (canvas.height / r.height);
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      lastX = x; lastY = y;
+      sigData = canvas.toDataURL();
+      document.getElementById('sig-status').textContent = '✓ Firma capturada';
+    });
+    canvas.addEventListener('mouseup',   () => { drawing = false; });
+    canvas.addEventListener('mouseleave',() => { drawing = false; });
+
+    // Touch support
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches[0];
+      lastX = (t.clientX - r.left) * (canvas.width / r.width);
+      lastY = (t.clientY - r.top)  * (canvas.height / r.height);
+      drawing = true;
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (!drawing) return;
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches[0];
+      const x = (t.clientX - r.left) * (canvas.width / r.width);
+      const y = (t.clientY - r.top)  * (canvas.height / r.height);
+      ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+      lastX = x; lastY = y;
+      sigData = canvas.toDataURL();
+      document.getElementById('sig-status').textContent = '✓ Firma capturada';
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { drawing = false; });
+  });
+
+  function resetCanvas() {
+    if (!ctx) return;
+    const canvas = document.getElementById('sig-canvas');
+    ctx.fillStyle = '#0d1119';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+  }
+
+  function clearSig() {
+    resetCanvas();
+    sigData = null;
+    const s = document.getElementById('sig-status');
+    if (s) s.textContent = 'Dibuja tu firma';
+  }
+
+  // ========== TOAST ==========
+  function showToast(msg, type) {
+    const old = document.querySelector('.toast');
+    if (old) old.remove();
+    const t = document.createElement('div');
+    t.className = `toast ${type || 'info'}`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+  }
+</script>
+
+</body>
+</html>
