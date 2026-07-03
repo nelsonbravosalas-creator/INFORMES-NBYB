@@ -2,7 +2,7 @@
  * GET  /api/service-orders  — listar todas las OTs
  * POST /api/service-orders  — crear o upsert (por legacy_id)
  */
-import { sql, json, error } from "../_lib/db";
+import { sql, json, error } from "../_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   try {

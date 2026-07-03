@@ -2,7 +2,7 @@
  * GET  /api/reports         — listar todos los informes
  * POST /api/reports         — crear o upsert (por legacy_id si existe)
  */
-import { sql, json, error } from "../_lib/db";
+import { sql, json, error } from "../_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   try {

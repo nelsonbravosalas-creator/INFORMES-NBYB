@@ -2,7 +2,7 @@
  * GET    /api/service-orders/:id  — leer una OT específica
  * DELETE /api/service-orders/:id  — eliminar
  */
-import { sql, json, error } from "../_lib/db";
+import { sql, json, error } from "../_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   try {

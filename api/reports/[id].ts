@@ -4,7 +4,7 @@
  *
  * El :id puede ser el UUID de Postgres o el legacy_id (UUID local de LocalForage).
  */
-import { sql, json, error } from "../_lib/db";
+import { sql, json, error } from "../_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   try {

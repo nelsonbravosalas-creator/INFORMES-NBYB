@@ -2,7 +2,7 @@
  * GET /api/admin/settings — leer configuración global
  * PUT /api/admin/settings — actualizar catálogos y branding
  */
-import { sql, json, error } from "../_lib/db";
+import { sql, json, error } from "../_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   try {

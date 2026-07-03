@@ -5,7 +5,7 @@
  * de equipo HVAC extraídos por Gemini AI.
  */
 import { GoogleGenAI, Type } from "@google/genai";
-import { json, error } from "./_lib/db";
+import { json, error } from "./_lib/db.js";
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") {
