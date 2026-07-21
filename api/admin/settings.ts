@@ -2,9 +2,14 @@
  * GET /api/admin/settings — leer configuración global
  * PUT /api/admin/settings — actualizar catálogos y branding
  */
-import { sql, json, error } from "../_lib/db.js";
+import { sql, json, error, serverError } from "../_lib/db.js";
+import { authenticate } from "../_lib/auth.js";
+import { logAudit } from "../_lib/audit.js";
 
 export default async function handler(req: Request): Promise<Response> {
+  const auth = authenticate(req);
+  if (!auth) return error("No autenticado", 401);
+
   try {
     if (req.method === "GET") {
       const rows = await sql`
@@ -49,6 +54,8 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     if (req.method === "PUT") {
+      if (auth.role !== "administrador") return error("No autorizado", 403);
+
       const body = (await req.json()) as any;
 
       await sql`
@@ -64,12 +71,15 @@ export default async function handler(req: Request): Promise<Response> {
         WHERE id = 1
       `;
 
+      await logAudit({
+        userId: auth.sub, userName: auth.nombre, action: "update",
+        entityType: "admin_settings", entityId: "1", req,
+      });
       return json({ success: true });
     }
 
     return error("Método no permitido", 405);
   } catch (err: any) {
-    console.error("API /admin/settings error:", err);
-    return error(err.message ?? "Error del servidor", 500);
+    return serverError("API /admin/settings error:", err);
   }
 }

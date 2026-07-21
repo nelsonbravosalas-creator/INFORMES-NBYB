@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Mail, Delete, LogIn, AlertCircle, Check, Loader, Shield } from 'lucide-react';
 import { usePWAInstall } from './PWAInstallButton';
-import { loginWithPin, initUsersDB } from '../utils/storage';
-import { AuthSession } from '../types';
+import { loginWithPin, initUsersDB, saveSession, cacheOfflineCredential } from '../utils/storage';
+import { AuthAPI } from '../utils/api-client';
+import { AuthSession, UserProfile } from '../types';
 
 interface LoginProps {
   onLoginSuccess: (session: AuthSession) => void;
@@ -61,31 +62,56 @@ export default function LoginComponent({ onLoginSuccess }: LoginProps) {
     setStep('pin');
   };
 
+  const rejectPin = (message: string) => {
+    setShakePin(true);
+    setTimeout(() => {
+      setShakePin(false);
+      setPin('');
+    }, 600);
+    setError(message);
+    setIsLoading(false);
+  };
+
   const handlePinSubmit = useCallback(async () => {
     if (pin.length < 4 || isLoading) return;
     setIsLoading(true);
     setError('');
 
+    // 1. Login real contra el servidor (fuente de verdad — ver /api/auth/login)
+    try {
+      const { token, user } = await AuthAPI.login(email, pin);
+      const session: AuthSession = {
+        userId: user.userId,
+        email: user.email,
+        nombre: user.nombre,
+        perfil: user.perfil as UserProfile,
+        clienteId: user.clienteId,
+        token,
+        expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+      };
+      await saveSession(session);
+      // Cachea el hash localmente para que el login offline funcione después en este dispositivo
+      await cacheOfflineCredential(
+        { id: user.userId, email: user.email, nombre: user.nombre, perfil: user.perfil as UserProfile, clienteId: user.clienteId },
+        pin
+      );
+      onLoginSuccess(session);
+      return;
+    } catch (err: any) {
+      if (err?.status === 401) return rejectPin('PIN incorrecto. Intenta de nuevo.');
+      if (err?.status === 429) return rejectPin(err.message || 'Demasiados intentos. Espera unos minutos.');
+      if (err?.status) return rejectPin('Error al iniciar sesión. Intenta de nuevo.');
+      // Sin `status`: falla de red → seguir con el fallback offline
+    }
+
+    // 2. Fallback offline: sin conexión, comparar contra el hash cacheado en este dispositivo
     try {
       const session = await loginWithPin(email, pin);
-      if (!session) {
-        // PIN incorrecto — animar y limpiar
-        setShakePin(true);
-        setTimeout(() => {
-          setShakePin(false);
-          setPin('');
-        }, 600);
-        setError('PIN incorrecto. Intenta de nuevo.');
-        setIsLoading(false);
-        return;
-      }
-      // Login exitoso
+      if (!session) return rejectPin('PIN incorrecto. Intenta de nuevo.');
       onLoginSuccess(session);
     } catch (err) {
       console.error('[Login] Error:', err);
-      setError('Error al iniciar sesión. Intenta de nuevo.');
-      setPin('');
-      setIsLoading(false);
+      rejectPin('Error al iniciar sesión. Intenta de nuevo.');
     }
   }, [pin, email, isLoading, onLoginSuccess]);
 
@@ -293,28 +319,31 @@ export default function LoginComponent({ onLoginSuccess }: LoginProps) {
           {isOnline ? 'Conectado' : 'Sin conexión — datos locales disponibles'}
         </div>
 
-        {/* Demo logins */}
-        <div className="mt-5 bg-slate-800/30 border border-slate-700/40 rounded-xl p-4">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider text-center mb-3">
-            Acceso de demostración
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={handleDemoAdmin}
-              className="py-2 px-3 bg-violet-900/30 hover:bg-violet-800/40 border border-violet-700/30 rounded-lg text-xs text-violet-300 font-semibold transition active:scale-95"
-            >
-              👤 Administrador<br />
-              <span className="text-violet-500 font-mono">PIN: 3517</span>
-            </button>
-            <button
-              onClick={handleDemoTecnico}
-              className="py-2 px-3 bg-blue-900/30 hover:bg-blue-800/40 border border-blue-700/30 rounded-lg text-xs text-blue-300 font-semibold transition active:scale-95"
-            >
-              🔧 Técnico<br />
-              <span className="text-blue-500 font-mono">PIN: 1234</span>
-            </button>
+        {/* Demo logins — solo en build de desarrollo. Mostrar PINs reales en producción
+            equivale a publicar una contraseña maestra (ver hallazgo A05). */}
+        {import.meta.env.DEV && (
+          <div className="mt-5 bg-slate-800/30 border border-slate-700/40 rounded-xl p-4">
+            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider text-center mb-3">
+              Acceso de demostración (solo dev)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleDemoAdmin}
+                className="py-2 px-3 bg-violet-900/30 hover:bg-violet-800/40 border border-violet-700/30 rounded-lg text-xs text-violet-300 font-semibold transition active:scale-95"
+              >
+                👤 Administrador<br />
+                <span className="text-violet-500 font-mono">PIN: 3517</span>
+              </button>
+              <button
+                onClick={handleDemoTecnico}
+                className="py-2 px-3 bg-blue-900/30 hover:bg-blue-800/40 border border-blue-700/30 rounded-lg text-xs text-blue-300 font-semibold transition active:scale-95"
+              >
+                🔧 Técnico<br />
+                <span className="text-blue-500 font-mono">PIN: 1234</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* CSS para animación de shake */}

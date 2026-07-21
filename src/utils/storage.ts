@@ -273,6 +273,12 @@ export async function deleteUser(id: string): Promise<AppUser[]> {
   return updated;
 }
 
+/**
+ * Fallback SOLO para modo offline: LoginComponent intenta primero
+ * AuthAPI.login (servidor, fuente de verdad) y únicamente cae aquí si no
+ * hay red. Una sesión creada por esta vía no trae un JWT válido, así que
+ * cualquier llamada a /api/* seguirá exigiendo reautenticación online.
+ */
 export async function loginWithPin(email: string, pin: string): Promise<AuthSession | null> {
   const user = await getUserByEmail(email);
   if (!user || !user.activo) return null;
@@ -307,6 +313,36 @@ export async function getSession(): Promise<AuthSession | null> {
     return null;
   }
   return session;
+}
+
+/** Persiste una sesión ya validada (p.ej. por AuthAPI.login contra el servidor). */
+export async function saveSession(session: AuthSession): Promise<void> {
+  await localforage.setItem(SESSION_KEY, session);
+}
+
+/**
+ * Cachea localmente el usuario recién autenticado por el servidor junto con
+ * el hash de su PIN, para que el login offline (sin red) siga funcionando
+ * en este mismo dispositivo la próxima vez.
+ */
+export async function cacheOfflineCredential(
+  user: { id: string; email: string; nombre: string; perfil: UserProfile; clienteId?: string },
+  pin: string
+): Promise<void> {
+  const existing = await getUserByEmail(user.email);
+  const pinHash = await hashPin(pin);
+  await saveUser({
+    id: existing?.id || user.id,
+    email: user.email.toLowerCase(),
+    nombre: user.nombre,
+    perfil: user.perfil,
+    pinHash,
+    activo: true,
+    clienteId: user.clienteId ?? existing?.clienteId,
+    avatarInitials: existing?.avatarInitials,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
+  });
 }
 
 export async function logout(): Promise<void> {

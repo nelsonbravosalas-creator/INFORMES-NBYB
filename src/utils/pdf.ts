@@ -4,6 +4,123 @@ import { HVACReport, ServiceOrderReport } from "../types";
 import { calculateSatTemp } from "./refrigerantPt";
 
 /**
+ * Escapa entidades HTML. Los exportadores de abajo arman HTML por
+ * concatenación de strings (para renderizarlo con html2canvas o descargarlo
+ * como archivo) — sin esto, un folio/nombre/comentario con `<img onerror=...>`
+ * (guardado antes de exigir autenticación en la API) se ejecutaría al
+ * abrir el informe.
+ */
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Clona un HVACReport escapando todos los campos de texto libre antes de interpolarlos en HTML. */
+function sanitizeReportForExport(report: HVACReport): HVACReport {
+  return {
+    ...report,
+    folio: escapeHtml(report.folio),
+    date: escapeHtml(report.date),
+    technicianName: escapeHtml(report.technicianName),
+    clientName: escapeHtml(report.clientName),
+    clientEmail: escapeHtml(report.clientEmail),
+    branchLocation: escapeHtml(report.branchLocation),
+    clientContactName: report.clientContactName ? escapeHtml(report.clientContactName) : report.clientContactName,
+    clientContactRole: report.clientContactRole ? escapeHtml(report.clientContactRole) : report.clientContactRole,
+    clientLocationAddress: report.clientLocationAddress ? escapeHtml(report.clientLocationAddress) : report.clientLocationAddress,
+    brand: escapeHtml(report.brand),
+    model: escapeHtml(report.model),
+    serialNumber: escapeHtml(report.serialNumber),
+    refrigerantType: escapeHtml(report.refrigerantType),
+    capacity: escapeHtml(report.capacity),
+    voltage: escapeHtml(report.voltage),
+    amperage: escapeHtml(report.amperage),
+    equipmentType: escapeHtml(report.equipmentType),
+    ambientTemp: escapeHtml(report.ambientTemp),
+    returnTemp: escapeHtml(report.returnTemp),
+    supplyTemp: escapeHtml(report.supplyTemp),
+    fanAmperage: escapeHtml(report.fanAmperage),
+    setPoint: report.setPoint ? escapeHtml(report.setPoint) : report.setPoint,
+    electricSchemeNote: report.electricSchemeNote ? escapeHtml(report.electricSchemeNote) : report.electricSchemeNote,
+    generalComments: escapeHtml(report.generalComments),
+    overallStatus: escapeHtml(report.overallStatus) as HVACReport["overallStatus"],
+    criticality: report.criticality ? (escapeHtml(report.criticality) as HVACReport["criticality"]) : report.criticality,
+    circuits: (report.circuits || []).map(c => ({
+      ...c,
+      name: escapeHtml(c.name),
+      refrigerantChargeInput: escapeHtml(c.refrigerantChargeInput),
+      status: escapeHtml(c.status) as typeof c.status,
+      suctionPressure: escapeHtml(c.suctionPressure),
+      dischargePressure: escapeHtml(c.dischargePressure),
+      superheat: escapeHtml(c.superheat),
+      subcooling: escapeHtml(c.subcooling),
+      compressors: (c.compressors || []).map(co => ({
+        ...co,
+        name: escapeHtml(co.name),
+        status: escapeHtml(co.status) as typeof co.status,
+        amperage: escapeHtml(co.amperage),
+        voltage: escapeHtml(co.voltage),
+        amperageR: co.amperageR ? escapeHtml(co.amperageR) : co.amperageR,
+        amperageS: co.amperageS ? escapeHtml(co.amperageS) : co.amperageS,
+        amperageT: co.amperageT ? escapeHtml(co.amperageT) : co.amperageT,
+      })),
+    })),
+    checklist: (report.checklist || []).map(chk => ({
+      ...chk,
+      category: escapeHtml(chk.category),
+      label: escapeHtml(chk.label),
+      status: escapeHtml(chk.status) as typeof chk.status,
+      notes: chk.notes ? escapeHtml(chk.notes) : chk.notes,
+      images: (chk.images || []).map(escapeHtml),
+    })),
+    signatures: report.signatures ? {
+      ...report.signatures,
+      technicianName: escapeHtml(report.signatures.technicianName),
+      technicianSignature: escapeHtml(report.signatures.technicianSignature),
+      clientName: escapeHtml(report.signatures.clientName),
+      clientSignature: escapeHtml(report.signatures.clientSignature),
+    } : report.signatures,
+  };
+}
+
+/** Clona un ServiceOrderReport escapando todos los campos de texto libre antes de interpolarlos en HTML. */
+function sanitizeOrderForExport(order: ServiceOrderReport): ServiceOrderReport {
+  return {
+    ...order,
+    folio: escapeHtml(order.folio),
+    date: escapeHtml(order.date),
+    technicianName: escapeHtml(order.technicianName),
+    orderNumber: escapeHtml(order.orderNumber),
+    serviceType: escapeHtml(order.serviceType) as ServiceOrderReport["serviceType"],
+    diagnosticRating: escapeHtml(order.diagnosticRating) as ServiceOrderReport["diagnosticRating"],
+    clientName: escapeHtml(order.clientName),
+    branchLocation: escapeHtml(order.branchLocation),
+    clientContactName: escapeHtml(order.clientContactName),
+    clientContactRole: escapeHtml(order.clientContactRole),
+    clientLocationAddress: escapeHtml(order.clientLocationAddress),
+    findings: escapeHtml(order.findings),
+    conclusions: escapeHtml(order.conclusions),
+    evidence: (order.evidence || []).map(p => ({
+      ...p,
+      imageBase64: escapeHtml(p.imageBase64),
+      description: escapeHtml(p.description),
+    })),
+    signatures: order.signatures ? {
+      ...order.signatures,
+      technicianName: escapeHtml(order.signatures.technicianName),
+      technicianSignature: escapeHtml(order.signatures.technicianSignature),
+      clientName: escapeHtml(order.signatures.clientName),
+      clientSignature: escapeHtml(order.signatures.clientSignature),
+    } : order.signatures,
+  };
+}
+
+/**
  * Downloads a raw JSON file of the HVAC report for backup or local import
  */
 export function exportReportAsJSON(report: HVACReport) {
@@ -20,6 +137,8 @@ export function exportReportAsJSON(report: HVACReport) {
  * Downloads report as formatted raw HTML offline file
  */
 export function exportReportAsHTML(report: HVACReport, companyName: string) {
+  report = sanitizeReportForExport(report);
+  companyName = escapeHtml(companyName);
   const htmlContent = `
 <!DOCTYPE html>
 <html lang="es">
@@ -306,6 +425,9 @@ export function exportReportAsHTML(report: HVACReport, companyName: string) {
  * using custom scaling algorithm for high-DPI retina display
  */
 export async function generatePDFReport(report: HVACReport, companyName: string, companyLogo: string): Promise<boolean> {
+  report = sanitizeReportForExport(report);
+  companyName = escapeHtml(companyName);
+  companyLogo = escapeHtml(companyLogo);
   // Let's create an offscreen modal structure with gorgeous layout so html2canvas renders it absolutely perfectly in 1:1 format
   const pdfContainer = document.createElement("div");
   pdfContainer.id = `temp-pdf-render-root`;
@@ -710,6 +832,8 @@ export function exportServiceOrderAsJSON(order: ServiceOrderReport) {
 
 /** Standalone HTML export for a service order */
 export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName: string) {
+  order = sanitizeOrderForExport(order);
+  companyName = escapeHtml(companyName);
   const RATING_LABEL: Record<string, string> = {
     excellent: "Excelente", normal: "Operativo",
     requires_action: "Requiere Acción", critical: "Crítico",
@@ -843,6 +967,8 @@ export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName:
 
 /** PDF generation for a service order (text-based A4) */
 export async function generateServiceOrderPDF(order: ServiceOrderReport, companyName: string): Promise<boolean> {
+  order = sanitizeOrderForExport(order);
+  companyName = escapeHtml(companyName);
   const RATING_LABEL: Record<string, string> = {
     excellent: "Excelente", normal: "Operativo",
     requires_action: "Requiere Acción", critical: "Crítico",

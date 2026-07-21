@@ -31,12 +31,25 @@ export async function queryOne<T = any>(
 }
 
 /**
+ * Cabeceras de seguridad aplicadas a toda respuesta JSON de la API.
+ * (CSP y Permissions-Policy se dejan fuera: afectan al documento HTML, no a
+ * respuestas JSON de fetch/XHR, y requieren pruebas dedicadas por el uso de
+ * cámara/canvas en NameplateOCR y SignaturePad.)
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+};
+
+/**
  * Helper: respuesta JSON estándar
  */
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...SECURITY_HEADERS },
   });
 }
 
@@ -45,4 +58,14 @@ export function json(data: unknown, status = 200): Response {
  */
 export function error(message: string, status = 500, details?: unknown): Response {
   return json({ error: message, details }, status);
+}
+
+/**
+ * Helper: loguea la excepción real en el servidor pero nunca la expone al
+ * cliente (evita filtrar mensajes internos de Postgres/Neon, rutas de
+ * archivos, etc. — ver hallazgo A05 Security Misconfiguration).
+ */
+export function serverError(context: string, err: unknown): Response {
+  console.error(context, err);
+  return error("Error interno del servidor. Intenta nuevamente.", 500);
 }

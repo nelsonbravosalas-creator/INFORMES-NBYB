@@ -7,6 +7,7 @@
  * - Todas las respuestas son JSON.
  */
 import { HVACReport, ServiceOrderReport, AdminSettings } from "../types";
+import { getSession } from "./storage";
 
 const API_BASE = ""; // mismo origen — Vercel sirve /api/* desde el mismo dominio
 
@@ -16,9 +17,15 @@ interface ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Adjunta el JWT de sesión (emitido por /api/auth/login) — sin esto, toda
+  // ruta protegida responde 401 (ver api/_lib/auth.ts).
+  const session = await getSession();
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(init?.headers as Record<string, string> ?? {}) };
+  if (session?.token) headers["Authorization"] = `Bearer ${session.token}`;
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   });
 
   if (!res.ok) {
@@ -85,6 +92,47 @@ export const AdminAPI = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Autenticación
+// ────────────────────────────────────────────────────────────────────────────
+export interface LoginResponse {
+  token: string;
+  user: { userId: string; email: string; nombre: string; perfil: string; clienteId: string };
+}
+
+export const AuthAPI = {
+  /** Lanza error si las credenciales son inválidas o hay un 429 — el caller decide el fallback offline. */
+  login: (email: string, pin: string) =>
+    request<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, pin }),
+    }),
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Usuarios (gestión server-side — reemplaza el CRUD 100% local)
+// ────────────────────────────────────────────────────────────────────────────
+export interface ServerAppUser {
+  id: string;
+  email: string;
+  nombre: string;
+  perfil: string;
+  activo: boolean;
+  clienteId?: string;
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export const UsersAPI = {
+  list: () => tryRequest<ServerAppUser[]>("/api/users"),
+  create: (data: { email: string; nombre: string; perfil: string; pin: string; activo?: boolean; clienteId?: string }) =>
+    request<ServerAppUser>("/api/users", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<{ nombre: string; perfil: string; pin: string; activo: boolean; clienteId: string }>) =>
+    request<ServerAppUser>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
 };
 
 // ────────────────────────────────────────────────────────────────────────────

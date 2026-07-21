@@ -3,12 +3,24 @@ import {
   X, UserPlus, Edit3, Trash2, Shield, Wrench, Users, Eye, EyeOff,
   CheckCircle, AlertCircle, Loader, KeyRound, Mail, User, ToggleLeft, ToggleRight
 } from 'lucide-react';
-import { AppUser, UserProfile } from '../types';
-import { getUsers, saveUser, deleteUser, hashPin } from '../utils/storage';
+import { UserProfile } from '../types';
+import { getUsers as getLocalUsers } from '../utils/storage';
+import { UsersAPI, ServerAppUser } from '../utils/api-client';
 
 interface UsersModalProps {
   onClose: () => void;
   currentUserId: string;
+}
+
+/** Subconjunto común entre el usuario local (offline) y el que devuelve el servidor. */
+interface DisplayUser {
+  id: string;
+  email: string;
+  nombre: string;
+  perfil: UserProfile;
+  activo: boolean;
+  avatarInitials?: string;
+  clienteId?: string;
 }
 
 const PROFILE_CONFIG: Record<UserProfile, { label: string; color: string; icon: React.ReactNode }> = {
@@ -43,10 +55,6 @@ function getInitials(nombre: string): string {
     .toUpperCase();
 }
 
-function generateId(): string {
-  return `usr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 interface UserFormData {
   email: string;
   nombre: string;
@@ -66,9 +74,9 @@ const EMPTY_FORM: UserFormData = {
 type ModalView = 'list' | 'form';
 
 export default function UsersModal({ onClose, currentUserId }: UsersModalProps) {
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [users, setUsers] = useState<DisplayUser[]>([]);
   const [view, setView] = useState<ModalView>('list');
-  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [editingUser, setEditingUser] = useState<DisplayUser | null>(null);
   const [form, setForm] = useState<UserFormData>(EMPTY_FORM);
   const [showPin, setShowPin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,8 +88,14 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
   }, []);
 
   const loadUsers = async () => {
-    const list = await getUsers();
-    setUsers(list);
+    // El servidor es la fuente de verdad; si no hay red, mostrar el caché local (solo lectura)
+    const serverList = await UsersAPI.list();
+    if (serverList) {
+      setUsers(serverList as DisplayUser[]);
+    } else {
+      const local = await getLocalUsers();
+      setUsers(local as DisplayUser[]);
+    }
   };
 
   const openCreate = () => {
@@ -92,7 +106,7 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
     setView('form');
   };
 
-  const openEdit = (user: AppUser) => {
+  const openEdit = (user: DisplayUser) => {
     setEditingUser(user);
     setForm({
       email: user.email,
@@ -120,69 +134,75 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
     if (form.pin && form.pin !== form.pinConfirm) {
       setError('Los PINs no coinciden'); return;
     }
-    // PIN si se cambió
     if (form.pin && (!/^\d{4}$/.test(form.pin))) {
       setError('El PIN debe ser de 4 dígitos numéricos'); return;
     }
 
-    // Verificar email duplicado
-    const allUsers = await getUsers();
-    const duplicate = allUsers.find(
+    const duplicate = users.find(
       u => u.email.toLowerCase() === form.email.toLowerCase() && u.id !== editingUser?.id
     );
     if (duplicate) { setError('Ya existe un usuario con ese correo'); return; }
 
     setIsLoading(true);
     try {
-      const pinHash = form.pin
-        ? await hashPin(form.pin)
-        : (editingUser?.pinHash || '');
+      // El PIN en texto plano viaja una sola vez, por HTTPS, al servidor —
+      // que lo hashea con bcrypt (ver api/users). El cliente ya no calcula
+      // ni almacena el hash "de verdad".
+      if (editingUser) {
+        await UsersAPI.update(editingUser.id, {
+          nombre: form.nombre.trim(),
+          perfil: form.perfil,
+          clienteId: editingUser.clienteId,
+          ...(form.pin ? { pin: form.pin } : {}),
+        });
+      } else {
+        await UsersAPI.create({
+          email: form.email.trim().toLowerCase(),
+          nombre: form.nombre.trim(),
+          perfil: form.perfil,
+          pin: form.pin,
+        });
+      }
 
-      const user: AppUser = {
-        id: editingUser?.id || generateId(),
-        email: form.email.trim().toLowerCase(),
-        nombre: form.nombre.trim(),
-        perfil: form.perfil,
-        pinHash,
-        activo: editingUser?.activo ?? true,
-        clienteId: editingUser?.clienteId || 'EECOL',
-        avatarInitials: getInitials(form.nombre.trim()),
-        createdAt: editingUser?.createdAt || new Date().toISOString(),
-        lastLogin: editingUser?.lastLogin,
-      };
-
-      await saveUser(user);
       await loadUsers();
       setSuccess(editingUser ? 'Usuario actualizado ✓' : 'Usuario creado ✓');
       setTimeout(() => {
         setSuccess('');
         setView('list');
       }, 1200);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[UsersModal] Save error:', err);
-      setError('Error al guardar el usuario');
+      setError(err?.message || 'Error al guardar el usuario');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleToggleActive = async (user: AppUser) => {
+  const handleToggleActive = async (user: DisplayUser) => {
     if (user.id === currentUserId) {
       alert('No puedes desactivarte a ti mismo.');
       return;
     }
-    await saveUser({ ...user, activo: !user.activo });
-    await loadUsers();
+    try {
+      await UsersAPI.update(user.id, { activo: !user.activo });
+      await loadUsers();
+    } catch (err: any) {
+      alert(err?.message || 'No se pudo actualizar el usuario');
+    }
   };
 
-  const handleDelete = async (user: AppUser) => {
+  const handleDelete = async (user: DisplayUser) => {
     if (user.id === currentUserId) {
       alert('No puedes eliminar tu propia cuenta.');
       return;
     }
     if (!window.confirm(`¿Eliminar al usuario "${user.nombre}"? Esta acción no se puede deshacer.`)) return;
-    await deleteUser(user.id);
-    await loadUsers();
+    try {
+      await UsersAPI.delete(user.id);
+      await loadUsers();
+    } catch (err: any) {
+      alert(err?.message || 'No se pudo eliminar el usuario');
+    }
   };
 
   return (

@@ -12,13 +12,5 @@ UPDATE admin_settings SET
   techs = '["Ing. Carlos Mendoza","Téc. Nelson Bravo","Téc. Alejandro Ruiz","Téc. Sofía Espinoza"]'::jsonb
 WHERE id = 1;
 
--- Admin user inicial (cambiar password tras primer login)
--- Hash de "Cambiar123!" con bcrypt rounds=10
-INSERT INTO users (email, name, role, password_hash)
-VALUES (
-  'admin@nbyb.cl',
-  'Administrador Principal',
-  'admin',
-  '$2b$10$rJZK0Q2QzKp3p5p5p5p5pe1QzKp3p5p5p5p5p5p5p5p5p5p5p5p5'  -- placeholder, regenerar
-)
-ON CONFLICT (email) DO NOTHING;
+-- Los usuarios de acceso (admin@nbyb.cl / tecnico@nbyb.cl) se siembran en
+-- schema.sql junto con la tabla `users`, con PIN hasheado vía pgcrypto.

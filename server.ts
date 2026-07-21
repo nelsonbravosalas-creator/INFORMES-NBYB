@@ -3,6 +3,8 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { verifyToken } from "./api/_lib/auth.js";
+import { checkRateLimit } from "./api/_lib/rateLimit.js";
 
 dotenv.config();
 
@@ -10,13 +12,34 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Cabeceras de seguridad básicas (mismas que las respuestas JSON de las Vercel Functions)
+  app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
   // Let's configure body size limit to support images
   app.use(express.json({ limit: "25mb" }));
   app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
-  // API Route for Gemini HVAC Nameplate OCR
+  // API Route for Gemini HVAC Nameplate OCR (réplica local de api/ocr.ts para `npm run dev`)
   app.post("/api/ocr", async (req, res) => {
     try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+      const auth = token ? verifyToken(token) : null;
+      if (!auth) {
+        return res.status(401).json({ error: "No autenticado" });
+      }
+
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const allowed = await checkRateLimit(`ocr:user:${auth.sub}:${ip}`, 30, 60 * 60);
+      if (!allowed) {
+        return res.status(429).json({ error: "Límite de reconocimientos OCR alcanzado. Intenta más tarde." });
+      }
+
       const { image, mimeType } = req.body;
       if (!image) {
         return res.status(400).json({ error: "No se proporcionó ninguna imagen." });
@@ -92,8 +115,8 @@ Si no puedes ver o leer algunos campos, colócalos como un campo vacío o una es
       return res.json({ success: true, data: parsedData });
     } catch (error: any) {
       console.error("Error en OCR de Gemini:", error);
-      return res.status(500).json({ 
-        error: "Error al procesar la imagen con Gemini AI: " + (error.message || error) 
+      return res.status(500).json({
+        error: "Error al procesar la imagen con Gemini AI. Intenta nuevamente."
       });
     }
   });

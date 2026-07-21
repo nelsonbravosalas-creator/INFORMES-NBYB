@@ -2,9 +2,14 @@
  * GET  /api/service-orders  — listar todas las OTs
  * POST /api/service-orders  — crear o upsert (por legacy_id)
  */
-import { sql, json, error } from "../_lib/db.js";
+import { sql, json, error, serverError } from "../_lib/db.js";
+import { authenticate } from "../_lib/auth.js";
+import { logAudit } from "../_lib/audit.js";
 
 export default async function handler(req: Request): Promise<Response> {
+  const auth = authenticate(req);
+  if (!auth) return error("No autenticado", 401);
+
   try {
     if (req.method === "GET") {
       const rows = await sql`
@@ -67,12 +72,16 @@ export default async function handler(req: Request): Promise<Response> {
           sync_version = service_orders.sync_version + 1
         RETURNING id, legacy_id, sync_version, updated_at
       `;
+      await logAudit({
+        userId: auth.sub, userName: auth.nombre,
+        action: result[0].sync_version === 1 ? "create" : "update",
+        entityType: "service_order", entityId: result[0].id, metadata: { folio: body.folio }, req,
+      });
       return json({ success: true, ...result[0] });
     }
 
     return error("Método no permitido", 405);
   } catch (err: any) {
-    console.error("API /service-orders error:", err);
-    return error(err.message ?? "Error del servidor", 500);
+    return serverError("API /service-orders error:", err);
   }
 }

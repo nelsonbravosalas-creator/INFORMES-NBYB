@@ -4,9 +4,14 @@
  *
  * El :id puede ser el UUID de Postgres o el legacy_id (UUID local de LocalForage).
  */
-import { sql, json, error } from "../_lib/db.js";
+import { sql, json, error, serverError } from "../_lib/db.js";
+import { authenticate } from "../_lib/auth.js";
+import { logAudit } from "../_lib/audit.js";
 
 export default async function handler(req: Request): Promise<Response> {
+  const auth = authenticate(req);
+  if (!auth) return error("No autenticado", 401);
+
   try {
     const url = new URL(req.url);
     const id = url.pathname.split("/").pop();
@@ -24,16 +29,22 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     if (req.method === "DELETE") {
+      if (!["administrador", "supervisor"].includes(auth.role)) {
+        return error("No autorizado para eliminar informes", 403);
+      }
       const rows = isUuid
         ? await sql`DELETE FROM hvac_reports WHERE id = ${id}::uuid RETURNING id`
         : await sql`DELETE FROM hvac_reports WHERE legacy_id = ${id} RETURNING id`;
       if (rows.length === 0) return error("Informe no encontrado", 404);
+      await logAudit({
+        userId: auth.sub, userName: auth.nombre, action: "delete",
+        entityType: "hvac_report", entityId: rows[0].id, req,
+      });
       return json({ success: true, deletedId: rows[0].id });
     }
 
     return error("Método no permitido", 405);
   } catch (err: any) {
-    console.error("API /reports/:id error:", err);
-    return error(err.message ?? "Error del servidor", 500);
+    return serverError("API /reports/:id error:", err);
   }
 }

@@ -5,11 +5,22 @@
  * de equipo HVAC extraídos por Gemini AI.
  */
 import { GoogleGenAI, Type } from "@google/genai";
-import { json, error } from "./_lib/db.js";
+import { json, error, serverError } from "./_lib/db.js";
+import { authenticate } from "./_lib/auth.js";
+import { checkRateLimit } from "./_lib/rateLimit.js";
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") {
     return error("Método no permitido", 405);
+  }
+
+  const auth = authenticate(req);
+  if (!auth) return error("No autenticado", 401);
+
+  // Máx. 30 reconocimientos / hora por usuario — evita abuso de la cuota paga de Gemini
+  const allowed = await checkRateLimit(`ocr:user:${auth.sub}`, 30, 60 * 60);
+  if (!allowed) {
+    return error("Límite de reconocimientos OCR alcanzado. Intenta más tarde.", 429);
   }
 
   try {
@@ -69,7 +80,6 @@ Si no puedes ver o leer algunos campos, colócalos como un campo vacío o una es
     const data = JSON.parse(textResult.trim());
     return json({ success: true, data });
   } catch (err: any) {
-    console.error("OCR error:", err);
-    return error("Error al procesar la imagen con Gemini AI: " + (err.message || err), 500);
+    return serverError("OCR error:", err);
   }
 }

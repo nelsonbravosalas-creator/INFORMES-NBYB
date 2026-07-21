@@ -2,9 +2,14 @@
  * GET  /api/reports         — listar todos los informes
  * POST /api/reports         — crear o upsert (por legacy_id si existe)
  */
-import { sql, json, error } from "../_lib/db.js";
+import { sql, json, error, serverError } from "../_lib/db.js";
+import { authenticate } from "../_lib/auth.js";
+import { logAudit } from "../_lib/audit.js";
 
 export default async function handler(req: Request): Promise<Response> {
+  const auth = authenticate(req);
+  if (!auth) return error("No autenticado", 401);
+
   try {
     if (req.method === "GET") {
       const rows = await sql`
@@ -79,12 +84,16 @@ export default async function handler(req: Request): Promise<Response> {
           sync_version = hvac_reports.sync_version + 1
         RETURNING id, legacy_id, sync_version, updated_at
       `;
+      await logAudit({
+        userId: auth.sub, userName: auth.nombre,
+        action: result[0].sync_version === 1 ? "create" : "update",
+        entityType: "hvac_report", entityId: result[0].id, metadata: { folio: body.folio }, req,
+      });
       return json({ success: true, ...result[0] });
     }
 
     return error("Método no permitido", 405);
   } catch (err: any) {
-    console.error("API /reports error:", err);
-    return error(err.message ?? "Error del servidor", 500);
+    return serverError("API /reports error:", err);
   }
 }

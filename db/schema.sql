@@ -16,14 +16,33 @@ CREATE TABLE IF NOT EXISTS users (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email       TEXT UNIQUE NOT NULL,
   name        TEXT NOT NULL,
-  role        TEXT NOT NULL DEFAULT 'tech' CHECK (role IN ('admin', 'tech', 'viewer')),
-  password_hash TEXT,                     -- bcrypt, NULL si auth con magic link/OAuth
+  role        TEXT NOT NULL DEFAULT 'tecnico' CHECK (role IN ('administrador', 'supervisor', 'tecnico', 'contratista')),
+  password_hash TEXT,                     -- bcrypt del PIN de 4 dígitos (ver api/_lib/auth.ts)
   is_active   BOOLEAN NOT NULL DEFAULT true,
+  cliente_id  TEXT,                       -- cliente asignado (coincide con AppUser.clienteId del front)
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_login  TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Usuarios de acceso iniciales (mismos PIN que el login de demo: admin 3517, técnico 1234)
+INSERT INTO users (email, name, role, password_hash, is_active, cliente_id)
+VALUES
+  ('admin@nbyb.cl', 'Administrador NBYB', 'administrador', crypt('3517', gen_salt('bf', 10)), true, 'EECOL'),
+  ('tecnico@nbyb.cl', 'Técnico Demo', 'tecnico', crypt('1234', gen_salt('bf', 10)), true, 'EECOL')
+ON CONFLICT (email) DO NOTHING;
+
+-- ============================================================================
+-- RATE LIMITING (login y OCR) — persistente para sobrevivir cold starts serverless
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS rate_limit_events (
+  id          BIGSERIAL PRIMARY KEY,
+  bucket      TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limit_bucket_time ON rate_limit_events (bucket, created_at DESC);
 
 -- ============================================================================
 -- CLIENTES (empresas)
