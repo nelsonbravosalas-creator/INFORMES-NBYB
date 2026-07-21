@@ -31,7 +31,12 @@ INSERT INTO users (email, name, role, password_hash, is_active, cliente_id)
 VALUES
   ('admin@nbyb.cl', 'Administrador NBYB', 'administrador', crypt('3517', gen_salt('bf', 10)), true, 'EECOL'),
   ('tecnico@nbyb.cl', 'Técnico Demo', 'tecnico', crypt('1234', gen_salt('bf', 10)), true, 'EECOL')
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET
+  name = EXCLUDED.name,
+  role = EXCLUDED.role,
+  password_hash = EXCLUDED.password_hash,
+  is_active = true,
+  cliente_id = EXCLUDED.cliente_id;
 
 -- ============================================================================
 -- RATE LIMITING (login y OCR) — persistente para sobrevivir cold starts serverless
