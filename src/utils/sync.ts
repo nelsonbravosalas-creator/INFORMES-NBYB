@@ -31,7 +31,8 @@ export async function pushPendingReports(): Promise<{ pushed: number; failed: nu
   for (const report of pending) {
     const result = await ReportsAPI.save(report);
     if (result?.success) {
-      await saveReport({ ...report, _syncStatus: "synced" } as any);
+      const { id: serverId, ...serverFields } = result;
+      await saveReport({ ...report, ...serverFields, id: report.id, serverId, _syncStatus: "synced" } as any);
       pushed++;
     } else {
       failed++;
@@ -53,7 +54,8 @@ export async function pushPendingServiceOrders(): Promise<{ pushed: number; fail
   for (const ot of pending) {
     const result = await ServiceOrdersAPI.save(ot);
     if (result?.success) {
-      await saveServiceOrder({ ...ot, _syncStatus: "synced" } as any);
+      const { id: serverId, ...serverFields } = result;
+      await saveServiceOrder({ ...ot, ...serverFields, id: ot.id, serverId, _syncStatus: "synced" } as any);
       pushed++;
     } else {
       failed++;

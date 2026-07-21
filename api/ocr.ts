@@ -9,7 +9,7 @@ import { json, error, serverError } from "./_lib/db.js";
 import { authenticate } from "./_lib/auth.js";
 import { checkRateLimit } from "./_lib/rateLimit.js";
 
-export default async function handler(req: Request): Promise<Response> {
+export async function fetch(req: Request): Promise<Response> {
   if (req.method !== "POST") {
     return error("Método no permitido", 405);
   }

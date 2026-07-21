@@ -91,7 +91,7 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
 
   // Evidence photo handlers
   const handleAddPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+    const files: File[] = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
     files.forEach(file => {

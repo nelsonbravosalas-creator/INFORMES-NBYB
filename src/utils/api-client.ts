@@ -59,7 +59,7 @@ export const ReportsAPI = {
   list: () => tryRequest<HVACReport[]>("/api/reports"),
   get: (id: string) => tryRequest<HVACReport>(`/api/reports/${id}`),
   save: (report: HVACReport) =>
-    tryRequest<{ success: boolean; id: string }>("/api/reports", {
+    tryRequest<{ success: boolean; id: string } & Partial<HVACReport>>("/api/reports", {
       method: "POST",
       body: JSON.stringify(report),
     }),
@@ -74,7 +74,7 @@ export const ServiceOrdersAPI = {
   list: () => tryRequest<ServiceOrderReport[]>("/api/service-orders"),
   get: (id: string) => tryRequest<ServiceOrderReport>(`/api/service-orders/${id}`),
   save: (order: ServiceOrderReport) =>
-    tryRequest<{ success: boolean; id: string }>("/api/service-orders", {
+    tryRequest<{ success: boolean; id: string } & Partial<ServiceOrderReport>>("/api/service-orders", {
       method: "POST",
       body: JSON.stringify(order),
     }),

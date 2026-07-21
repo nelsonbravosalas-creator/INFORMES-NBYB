@@ -42,13 +42,17 @@ export interface Signatures {
 export interface HVACReport {
   id: string;
   folio: string;
+  legacyId?: string;
   timestamp: string;
   date: string;
   technicianName: string;
   
   // Client & Location Specs
+  clientId?: string;
   clientName: string;
   clientEmail: string;
+  branchId?: string;
+  siteId?: string;
   branchLocation: string;
   clientContactName?: string;
   clientContactRole?: string;
@@ -56,6 +60,9 @@ export interface HVACReport {
   clientRegion?: string;
 
   // Equipment Specs
+  equipmentId?: string;
+  correlative?: number;
+  correlativeLabel?: string;
   brand: string;
   model: string;
   serialNumber: string;
@@ -190,6 +197,7 @@ export interface LocalDB {
 export interface ServiceOrderReport {
   id: string;
   folio: string;
+  legacyId?: string;
   timestamp: string;
   date: string;
 
@@ -199,7 +207,10 @@ export interface ServiceOrderReport {
   orderNumber: string;
 
   // 2. Cliente & Localización
+  clientId?: string;
   clientName: string;
+  branchId?: string;
+  siteId?: string;
   branchLocation: string;
   clientContactName: string;
   clientContactRole: string;

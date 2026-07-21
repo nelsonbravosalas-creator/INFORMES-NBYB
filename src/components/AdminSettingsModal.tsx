@@ -334,8 +334,10 @@ function ClientModal({
                   </p>
                 ) : (
                   form.subs.map((sub, idx) => (
-                    <SubCard key={sub.id} sub={sub} idx={idx}
-                      onUpdate={updateSub} onRemove={removeSub} parentRegion={form.region} />
+                    <React.Fragment key={sub.id}>
+                      <SubCard sub={sub} idx={idx}
+                        onUpdate={updateSub} onRemove={removeSub} parentRegion={form.region} />
+                    </React.Fragment>
                   ))
                 )}
               </>

@@ -5,6 +5,7 @@ import {
   getServiceOrders, saveServiceOrder, deleteServiceOrder,
   getSession, logout,
 } from "./utils/storage";
+import { initAutoSync, syncAll } from "./utils/sync";
 import { exportReportsToExcel } from "./utils/excel";
 import {
   generatePDFReport, exportReportAsJSON, exportReportAsHTML,
@@ -99,6 +100,17 @@ export default function App() {
     loadInitialData();
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const stopSync = initAutoSync(async () => {
+      setReports(await getReports());
+      setServiceOrders(await getServiceOrders());
+    });
+
+    return stopSync;
+  }, [isAuthenticated]);
+
   // Theme support
   const toggleTheme = () => {
     setTheme(prev => prev === "light" ? "dark" : "light");
@@ -142,6 +154,8 @@ export default function App() {
     setServiceOrders(updated);
     setIsServiceOrderFormOpen(false);
     setActiveServiceOrder(null);
+    await syncAll();
+    setServiceOrders(await getServiceOrders());
   };
 
   const handleDeleteServiceOrder = async (id: string) => {
@@ -157,6 +171,8 @@ export default function App() {
     setReports(updated);
     setIsFormOpen(false);
     setActiveReport(null);
+    await syncAll();
+    setReports(await getReports());
   };
 
   // Delete report handler
@@ -653,6 +669,10 @@ export default function App() {
                           <td className="px-4 py-4.5">
                             <span className="font-semibold block text-zinc-200">{item.brand} - {item.model}</span>
                             <span className="text-[11px] text-zinc-500 block">{item.equipmentType} | {item.refrigerantType}</span>
+                            <span className="text-[10px] text-zinc-600 block font-mono">
+                              Corr: {item.correlativeLabel || (typeof item.correlative === "number" ? item.correlative.toString().padStart(4, "0") : "pendiente")}
+                              {item.equipmentId ? ` | Equipo: ${item.equipmentId.slice(0, 8)}` : ""}
+                            </span>
                           </td>
                           <td className="px-4 py-4.5 text-zinc-300 font-medium">
                             {item.technicianName}

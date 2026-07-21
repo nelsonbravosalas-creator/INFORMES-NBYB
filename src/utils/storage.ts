@@ -33,11 +33,12 @@ export async function getReports(): Promise<HVACReport[]> {
 export async function saveReport(report: HVACReport): Promise<HVACReport[]> {
   try {
     const list = await getReports();
+    const reportToSave = { ...report, _syncStatus: (report as any)._syncStatus ?? "pending" } as HVACReport;
     const existingIndex = list.findIndex(r => r.id === report.id);
     if (existingIndex > -1) {
-      list[existingIndex] = { ...report, timestamp: new Date().toISOString() };
+      list[existingIndex] = { ...reportToSave, timestamp: new Date().toISOString() };
     } else {
-      list.unshift(report);
+      list.unshift(reportToSave);
     }
     await localforage.setItem(REPORT_LIST_KEY, list);
     
@@ -51,11 +52,12 @@ export async function saveReport(report: HVACReport): Promise<HVACReport[]> {
   } catch (err) {
     console.error("localForage saveReport failed, doing localStorage save", err);
     const list = await getReports();
+    const reportToSave = { ...report, _syncStatus: (report as any)._syncStatus ?? "pending" } as HVACReport;
     const existingIndex = list.findIndex(r => r.id === report.id);
     if (existingIndex > -1) {
-      list[existingIndex] = { ...report, timestamp: new Date().toISOString() };
+      list[existingIndex] = { ...reportToSave, timestamp: new Date().toISOString() };
     } else {
-      list.unshift(report);
+      list.unshift(reportToSave);
     }
     try {
       localStorage.setItem(REPORT_LIST_KEY, JSON.stringify(list));
@@ -133,11 +135,12 @@ export async function getServiceOrders(): Promise<ServiceOrderReport[]> {
 export async function saveServiceOrder(order: ServiceOrderReport): Promise<ServiceOrderReport[]> {
   try {
     const list = await getServiceOrders();
+    const orderToSave = { ...order, _syncStatus: (order as any)._syncStatus ?? "pending" } as ServiceOrderReport;
     const idx = list.findIndex(o => o.id === order.id);
     if (idx > -1) {
-      list[idx] = { ...order, timestamp: new Date().toISOString() };
+      list[idx] = { ...orderToSave, timestamp: new Date().toISOString() };
     } else {
-      list.unshift(order);
+      list.unshift(orderToSave);
     }
     await localforage.setItem(SERVICE_ORDERS_KEY, list);
     try { localStorage.setItem(SERVICE_ORDERS_KEY, JSON.stringify(list)); } catch (_) {}
@@ -145,11 +148,12 @@ export async function saveServiceOrder(order: ServiceOrderReport): Promise<Servi
   } catch (err) {
     console.error("localForage saveServiceOrder failed", err);
     const list = await getServiceOrders();
+    const orderToSave = { ...order, _syncStatus: (order as any)._syncStatus ?? "pending" } as ServiceOrderReport;
     const idx = list.findIndex(o => o.id === order.id);
     if (idx > -1) {
-      list[idx] = { ...order, timestamp: new Date().toISOString() };
+      list[idx] = { ...orderToSave, timestamp: new Date().toISOString() };
     } else {
-      list.unshift(order);
+      list.unshift(orderToSave);
     }
     try { localStorage.setItem(SERVICE_ORDERS_KEY, JSON.stringify(list)); } catch (_) {}
     return list;

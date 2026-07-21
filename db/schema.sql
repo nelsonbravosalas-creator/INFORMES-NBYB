@@ -87,6 +87,81 @@ CREATE INDEX IF NOT EXISTS idx_subs_client ON sub_branches(client_id);
 CREATE INDEX IF NOT EXISTS idx_subs_code ON sub_branches(code);
 
 -- ============================================================================
+-- EQUIPOS (activos inspeccionables por cliente/sitio)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS equipment (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  legacy_id         TEXT UNIQUE,
+  client_id         UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  site_id           UUID NOT NULL REFERENCES sub_branches(id) ON DELETE CASCADE,
+  code              VARCHAR(32),
+  equipment_type    TEXT,
+  brand             TEXT,
+  model             TEXT,
+  serial_number     TEXT NOT NULL,
+  refrigerant_type  TEXT,
+  capacity          TEXT,
+  voltage           TEXT,
+  amperage          TEXT,
+  criticality       TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_equipment_client_site_serial UNIQUE (client_id, site_id, serial_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_equipment_client_site ON equipment(client_id, site_id);
+CREATE INDEX IF NOT EXISTS idx_equipment_serial ON equipment(serial_number);
+
+-- Correlativo por equipo para informes: 0000..9999
+CREATE TABLE IF NOT EXISTS equipment_report_counters (
+  equipment_id       UUID PRIMARY KEY REFERENCES equipment(id) ON DELETE CASCADE,
+  last_correlative   SMALLINT NOT NULL CHECK (last_correlative BETWEEN 0 AND 9999),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION next_equipment_report_correlative(p_equipment_id UUID)
+RETURNS SMALLINT AS $$
+DECLARE
+  v_current SMALLINT;
+  v_next SMALLINT;
+  v_rows INTEGER;
+BEGIN
+  INSERT INTO equipment_report_counters (equipment_id, last_correlative)
+  VALUES (p_equipment_id, 0)
+  ON CONFLICT (equipment_id) DO NOTHING;
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+
+  IF v_rows = 1 THEN
+    RETURN 0;
+  END IF;
+
+  SELECT last_correlative
+  INTO v_current
+  FROM equipment_report_counters
+  WHERE equipment_id = p_equipment_id
+  FOR UPDATE;
+
+  IF v_current IS NULL THEN
+    RAISE EXCEPTION 'No se pudo inicializar correlativo para equipo %', p_equipment_id;
+  END IF;
+
+  IF v_current >= 9999 THEN
+    RAISE EXCEPTION 'Correlativo agotado para equipo %', p_equipment_id;
+  END IF;
+
+  v_next := v_current + 1;
+
+  UPDATE equipment_report_counters
+  SET last_correlative = v_next,
+      updated_at = now()
+  WHERE equipment_id = p_equipment_id;
+
+  RETURN v_next;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
 -- CONFIGURACIÓN ADMIN (catálogos globales — singleton)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS admin_settings (
@@ -120,6 +195,9 @@ CREATE TABLE IF NOT EXISTS hvac_reports (
   client_id       UUID REFERENCES clients(id) ON DELETE SET NULL,
   branch_name     TEXT,
   branch_id       UUID REFERENCES sub_branches(id) ON DELETE SET NULL,
+  equipment_id    UUID REFERENCES equipment(id) ON DELETE SET NULL,
+  correlative     SMALLINT CHECK (correlative BETWEEN 0 AND 9999),
+  correlative_label TEXT GENERATED ALWAYS AS (lpad(correlative::TEXT, 4, '0')) STORED,
 
   -- Equipo
   brand           TEXT,
@@ -154,6 +232,10 @@ CREATE INDEX IF NOT EXISTS idx_reports_client  ON hvac_reports(client_name);
 CREATE INDEX IF NOT EXISTS idx_reports_status  ON hvac_reports(overall_status);
 CREATE INDEX IF NOT EXISTS idx_reports_legacy  ON hvac_reports(legacy_id);
 CREATE INDEX IF NOT EXISTS idx_reports_circuits_gin ON hvac_reports USING GIN (circuits);
+CREATE INDEX IF NOT EXISTS idx_reports_client_branch_equipment ON hvac_reports(client_id, branch_id, equipment_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_reports_equipment_correlative
+  ON hvac_reports(client_id, branch_id, equipment_id, correlative)
+  WHERE equipment_id IS NOT NULL AND correlative IS NOT NULL;
 
 -- ============================================================================
 -- ÓRDENES DE SERVICIO (OT)
@@ -235,6 +317,11 @@ CREATE TRIGGER set_updated_at_clients
 DROP TRIGGER IF EXISTS set_updated_at_reports ON hvac_reports;
 CREATE TRIGGER set_updated_at_reports
   BEFORE UPDATE ON hvac_reports
+  FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at_equipment ON equipment;
+CREATE TRIGGER set_updated_at_equipment
+  BEFORE UPDATE ON equipment
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
 DROP TRIGGER IF EXISTS set_updated_at_ot ON service_orders;

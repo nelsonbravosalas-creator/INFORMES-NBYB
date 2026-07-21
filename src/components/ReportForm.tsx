@@ -25,8 +25,10 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
   const [folio, setFolio] = useState("");
   const [date, setDate] = useState("");
   const [technicianName, setTechnicianName] = useState("");
+  const [clientId, setClientId] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [branchId, setBranchId] = useState("");
   const [branchLocation, setBranchLocation] = useState("");
   const [clientContactName, setClientContactName] = useState("");
   const [clientContactRole, setClientContactRole] = useState("");
@@ -34,6 +36,9 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
   const [clientRegion, setClientRegion] = useState("");
 
   // Ficha técnica
+  const [equipmentId, setEquipmentId] = useState("");
+  const [correlative, setCorrelative] = useState<number | undefined>(undefined);
+  const [correlativeLabel, setCorrelativeLabel] = useState("");
   const [equipmentType, setEquipmentType] = useState("");
   const [criticality, setCriticality] = useState<'altamente_critico' | 'critico' | 'no_critico'>("no_critico");
   const [brand, setBrand] = useState("");
@@ -103,6 +108,19 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     setNewTechName("");
   };
 
+  const findClientRecord = (name: string) =>
+    adminSettings.clientRecords?.find(c => c.name === name);
+
+  const findBranchRecord = (cName: string, bName: string) =>
+    findClientRecord(cName)?.subs?.find(s => s.name === bName || s.code === bName);
+
+  const updateTenantIds = (cName: string, bName: string) => {
+    const clientRecord = findClientRecord(cName);
+    const branchRecord = clientRecord?.subs?.find(s => s.name === bName || s.code === bName);
+    setClientId(clientRecord?.id || "");
+    setBranchId(branchRecord?.id || "");
+  };
+
   // Helper to load client and branch attributes from extended details with smart fallbacks
   const updateClientInfoFromDatabase = (cName: string, bLocation: string) => {
     if (!cName) return;
@@ -137,14 +155,19 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setFolio(report.folio);
       setDate(report.date);
       setTechnicianName(report.technicianName);
+      setClientId(report.clientId || "");
       setClientName(report.clientName);
       setClientEmail(report.clientEmail);
+      setBranchId(report.branchId || report.siteId || "");
       setBranchLocation(report.branchLocation);
       setClientContactName(report.clientContactName || "");
       setClientContactRole(report.clientContactRole || "");
       setClientLocationAddress(report.clientLocationAddress || "");
       setClientRegion(report.clientRegion || "");
 
+      setEquipmentId(report.equipmentId || "");
+      setCorrelative(report.correlative);
+      setCorrelativeLabel(report.correlativeLabel || "");
       setEquipmentType(report.equipmentType);
       setCriticality(report.criticality || "no_critico");
       setBrand(report.brand);
@@ -177,13 +200,20 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setTechnicianName(adminSettings.techs[0] || "");
       
       const initialClient = adminSettings.clients[0] || "";
+      const initialClientRecord = findClientRecord(initialClient);
+      setClientId(initialClientRecord?.id || "");
       setClientName(initialClient);
       setClientEmail("");
       
       // Auto-set first branch if matches client
       const clientBranches = adminSettings.branches[initialClient] || [];
       const initialBranch = clientBranches[0] || "";
+      const initialBranchRecord = initialClientRecord?.subs?.find(s => s.name === initialBranch || s.code === initialBranch);
+      setBranchId(initialBranchRecord?.id || "");
       setBranchLocation(initialBranch);
+      setEquipmentId("");
+      setCorrelative(undefined);
+      setCorrelativeLabel("");
 
       // Load linked metadata
       updateClientInfoFromDatabase(initialClient, initialBranch);
@@ -209,14 +239,19 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
   // Handle client change list and dynamic branch population
   const handleClientChange = (cName: string) => {
     setClientName(cName);
+    const clientRecord = findClientRecord(cName);
+    setClientId(clientRecord?.id || "");
     const clientBranches = adminSettings.branches[cName] || [];
     const firstBranch = clientBranches[0] || "";
+    const branchRecord = clientRecord?.subs?.find(s => s.name === firstBranch || s.code === firstBranch);
+    setBranchId(branchRecord?.id || "");
     setBranchLocation(firstBranch);
     updateClientInfoFromDatabase(cName, firstBranch);
   };
 
   const handleBranchChange = (bLoc: string) => {
     setBranchLocation(bLoc);
+    setBranchId(findBranchRecord(clientName, bLoc)?.id || "");
     updateClientInfoFromDatabase(clientName, bLoc);
   };
 
@@ -224,6 +259,10 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     if (onUpdateAdminSettings) {
       onUpdateAdminSettings(updatedSettings);
     }
+    const clientRecord = updatedSettings.clientRecords?.find(c => c.name === newlyCreatedClient);
+    const branchRecord = clientRecord?.subs?.find(s => s.name === firstBranch || s.code === firstBranch);
+    setClientId(clientRecord?.id || "");
+    setBranchId(branchRecord?.id || "");
     setClientName(newlyCreatedClient);
     setBranchLocation(firstBranch);
     setClientEmail(contactEmail);
@@ -262,13 +301,19 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       timestamp: new Date().toISOString(),
       date,
       technicianName,
+      clientId,
       clientName,
       clientEmail,
+      branchId,
+      siteId: branchId,
       branchLocation,
       clientContactName,
       clientContactRole,
       clientLocationAddress,
       clientRegion,
+      equipmentId,
+      correlative,
+      correlativeLabel,
       brand,
       model,
       serialNumber,
@@ -438,6 +483,12 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
                 )}
               </div>
             </div>
+
+            {(clientId || branchId || equipmentId || correlativeLabel) && (
+              <div className="text-[10px] text-zinc-500 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 font-mono break-all">
+                ID_Cliente: {clientId || "pendiente"} | ID_Sitio: {branchId || "pendiente"} | ID_Equipo: {equipmentId || "se asigna al sincronizar"} | ID_Correlativo: {correlativeLabel || "0000..9999"}
+              </div>
+            )}
           </div>
 
           {/* Client & Branch Card */}

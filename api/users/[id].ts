@@ -7,7 +7,7 @@ import { sql, json, error, serverError } from "../_lib/db.js";
 import { authenticate } from "../_lib/auth.js";
 import { logAudit } from "../_lib/audit.js";
 
-export default async function handler(req: Request): Promise<Response> {
+export async function fetch(req: Request): Promise<Response> {
   const auth = authenticate(req);
   if (!auth) return error("No autenticado", 401);
 
