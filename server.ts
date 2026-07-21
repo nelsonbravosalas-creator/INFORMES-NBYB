@@ -4,7 +4,6 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { verifyToken } from "./api/_lib/auth.js";
-import { checkRateLimit } from "./api/_lib/rateLimit.js";
 
 dotenv.config();
 
@@ -35,6 +34,7 @@ async function startServer() {
       }
 
       const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const { checkRateLimit } = await import("./api/_lib/rateLimit.js");
       const allowed = await checkRateLimit(`ocr:user:${auth.sub}:${ip}`, 30, 60 * 60);
       if (!allowed) {
         return res.status(429).json({ error: "Límite de reconocimientos OCR alcanzado. Intenta más tarde." });

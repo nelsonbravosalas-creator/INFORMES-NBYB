@@ -10,7 +10,7 @@ import { signToken } from "../_lib/auth.js";
 import { checkRateLimit, clientIp } from "../_lib/rateLimit.js";
 import { logAudit } from "../_lib/audit.js";
 
-export async function fetch(req: Request): Promise<Response> {
+export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return error("Método no permitido", 405);
 
   try {
