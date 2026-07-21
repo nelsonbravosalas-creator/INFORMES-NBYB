@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { HVACReport, AdminSettings, Circuit, InspectionChecklistItem } from "../types";
+import { HVACReport, AdminSettings, Circuit, InspectionChecklistItem, ClientRecord, SubBranch } from "../types";
 import { DEFAULT_CHECKLIST_TEMPLATE } from "../constants";
 import NameplateOCR from "./NameplateOCR";
 import CircuitArchitecture from "./CircuitArchitecture";
@@ -108,17 +108,61 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     setNewTechName("");
   };
 
-  const findClientRecord = (name: string) =>
-    adminSettings.clientRecords?.find(c => c.name === name);
+  const catalogKey = (value: string) => value.trim().toLocaleLowerCase();
 
-  const findBranchRecord = (cName: string, bName: string) =>
-    findClientRecord(cName)?.subs?.find(s => s.name === bName || s.code === bName);
+  const findClientRecord = (name: string, settings: AdminSettings = adminSettings) =>
+    settings.clientRecords?.find(c => catalogKey(c.name) === catalogKey(name));
+
+  const findBranchRecord = (cName: string, bName: string, settings: AdminSettings = adminSettings) =>
+    findClientRecord(cName, settings)?.subs?.find(s =>
+      catalogKey(s.name) === catalogKey(bName) || catalogKey(s.code) === catalogKey(bName)
+    );
+
+  const branchLabel = (clientRecord: ClientRecord | undefined, branchRecord: SubBranch | undefined, fallback = "") =>
+    clientRecord?.noSubs
+      ? (clientRecord.address || clientRecord.name || fallback)
+      : (branchRecord?.name || branchRecord?.code || fallback);
 
   const updateTenantIds = (cName: string, bName: string) => {
     const clientRecord = findClientRecord(cName);
-    const branchRecord = clientRecord?.subs?.find(s => s.name === bName || s.code === bName);
+    const branchRecord = findBranchRecord(cName, bName);
     setClientId(clientRecord?.id || "");
     setBranchId(branchRecord?.id || "");
+  };
+
+  const applyClientCatalogDetails = (
+    cName: string,
+    bLocation: string,
+    settings: AdminSettings = adminSettings
+  ) => {
+    const clientRecord = findClientRecord(cName, settings);
+    const branchRecord = findBranchRecord(cName, bLocation, settings);
+
+    if (!clientRecord) return false;
+
+    const useClientContact = clientRecord.noSubs || branchRecord?.sameContact !== false;
+    const branchRegion = branchRecord?.region && branchRecord.region !== "HEREDAR"
+      ? branchRecord.region
+      : clientRecord.region;
+
+    setClientId(clientRecord.id || "");
+    setBranchId(clientRecord.noSubs ? "" : (branchRecord?.id || ""));
+    setClientContactName(useClientContact ? clientRecord.contactPerson : (branchRecord?.contactPerson || clientRecord.contactPerson));
+    setClientContactRole(useClientContact ? clientRecord.contactRole : (branchRecord?.contactRole || clientRecord.contactRole));
+    setClientLocationAddress(clientRecord.noSubs ? clientRecord.address : (branchRecord?.address || clientRecord.address));
+    setClientRegion(branchRegion || "");
+    setClientEmail(useClientContact ? clientRecord.contactEmail : (branchRecord?.contactEmail || clientRecord.contactEmail));
+
+    return true;
+  };
+
+  const loadClientSelectionDetails = (
+    cName: string,
+    bLocation: string,
+    settings: AdminSettings = adminSettings
+  ) => {
+    if (applyClientCatalogDetails(cName, bLocation, settings)) return;
+    updateClientInfoFromDatabase(cName, bLocation);
   };
 
   // Helper to load client and branch attributes from extended details with smart fallbacks
@@ -208,15 +252,16 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       // Auto-set first branch if matches client
       const clientBranches = adminSettings.branches[initialClient] || [];
       const initialBranch = clientBranches[0] || "";
-      const initialBranchRecord = initialClientRecord?.subs?.find(s => s.name === initialBranch || s.code === initialBranch);
+      const initialBranchRecord = findBranchRecord(initialClient, initialBranch);
+      const initialBranchLocation = branchLabel(initialClientRecord, initialBranchRecord, initialBranch);
       setBranchId(initialBranchRecord?.id || "");
-      setBranchLocation(initialBranch);
+      setBranchLocation(initialBranchLocation);
       setEquipmentId("");
       setCorrelative(undefined);
       setCorrelativeLabel("");
 
       // Load linked metadata
-      updateClientInfoFromDatabase(initialClient, initialBranch);
+      loadClientSelectionDetails(initialClient, initialBranchLocation);
 
       // Default technical specifications
       setEquipmentType(adminSettings.equipmentTypes[0] || "");
@@ -243,16 +288,17 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     setClientId(clientRecord?.id || "");
     const clientBranches = adminSettings.branches[cName] || [];
     const firstBranch = clientBranches[0] || "";
-    const branchRecord = clientRecord?.subs?.find(s => s.name === firstBranch || s.code === firstBranch);
+    const branchRecord = findBranchRecord(cName, firstBranch);
+    const nextBranchLocation = branchLabel(clientRecord, branchRecord, firstBranch);
     setBranchId(branchRecord?.id || "");
-    setBranchLocation(firstBranch);
-    updateClientInfoFromDatabase(cName, firstBranch);
+    setBranchLocation(nextBranchLocation);
+    loadClientSelectionDetails(cName, nextBranchLocation);
   };
 
   const handleBranchChange = (bLoc: string) => {
     setBranchLocation(bLoc);
     setBranchId(findBranchRecord(clientName, bLoc)?.id || "");
-    updateClientInfoFromDatabase(clientName, bLoc);
+    loadClientSelectionDetails(clientName, bLoc);
   };
 
   const handleAddNewClient = (updatedSettings: AdminSettings, newlyCreatedClient: string, firstBranch: string, contactEmail: string) => {
@@ -260,12 +306,14 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       onUpdateAdminSettings(updatedSettings);
     }
     const clientRecord = updatedSettings.clientRecords?.find(c => c.name === newlyCreatedClient);
-    const branchRecord = clientRecord?.subs?.find(s => s.name === firstBranch || s.code === firstBranch);
+    const branchRecord = findBranchRecord(newlyCreatedClient, firstBranch, updatedSettings);
+    const nextBranchLocation = branchLabel(clientRecord, branchRecord, firstBranch);
     setClientId(clientRecord?.id || "");
     setBranchId(branchRecord?.id || "");
     setClientName(newlyCreatedClient);
-    setBranchLocation(firstBranch);
-    setClientEmail(contactEmail);
+    setBranchLocation(nextBranchLocation);
+    loadClientSelectionDetails(newlyCreatedClient, nextBranchLocation, updatedSettings);
+    if (contactEmail) setClientEmail(contactEmail);
     setIsNewClientOpen(false);
   };
 
@@ -547,7 +595,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
                             }
                           }
                           setBranchLocation(trimmed);
-                          updateClientInfoFromDatabase(clientName, trimmed);
+                          loadClientSelectionDetails(clientName, trimmed);
                         }
                       }}
                       className="text-[10px] bg-blue-600/10 border border-blue-500/20 hover:bg-blue-500/15 text-blue-400 font-bold px-2 py-0.5 rounded transition cursor-pointer flex items-center gap-1 uppercase tracking-wide"
