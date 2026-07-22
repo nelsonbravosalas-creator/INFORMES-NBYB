@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { AdminSettings, ClientRecord, SubBranch, SubType } from "../types";
+import { DEFAULT_ADMIN_SETTINGS } from "../constants";
 import { importExcelToAdminData } from "../utils/excel";
 import {
   Building, Upload, Plus, Trash2, Settings2, X, FileSpreadsheet,
@@ -51,7 +52,7 @@ function syncLegacy(records: ClientRecord[]): { clients: string[]; branches: Rec
 
 function migrateRecords(settings: AdminSettings): ClientRecord[] {
   if (settings.clientRecords?.length) return settings.clientRecords;
-  return settings.clients.map((name, i) => ({
+  return (settings.clients ?? []).map((name, i) => ({
     id: `cli_legacy_${i}`,
     name,
     address: "",
@@ -70,6 +71,28 @@ function migrateRecords(settings: AdminSettings): ClientRecord[] {
       sameContact: true,
     })),
   }));
+}
+
+function normalizeSettings(settings: AdminSettings): AdminSettings {
+  const merged: AdminSettings = {
+    ...DEFAULT_ADMIN_SETTINGS,
+    ...settings,
+    clients: Array.isArray(settings.clients) ? settings.clients : DEFAULT_ADMIN_SETTINGS.clients,
+    branches: settings.branches && typeof settings.branches === "object" ? settings.branches : DEFAULT_ADMIN_SETTINGS.branches,
+    equipmentTypes: Array.isArray(settings.equipmentTypes) ? settings.equipmentTypes : DEFAULT_ADMIN_SETTINGS.equipmentTypes,
+    brands: Array.isArray(settings.brands) ? settings.brands : DEFAULT_ADMIN_SETTINGS.brands,
+    refrigerants: Array.isArray(settings.refrigerants) ? settings.refrigerants : DEFAULT_ADMIN_SETTINGS.refrigerants,
+    techs: Array.isArray(settings.techs) ? settings.techs : DEFAULT_ADMIN_SETTINGS.techs,
+    logo: settings.logo ?? "",
+    companyName: settings.companyName || DEFAULT_ADMIN_SETTINGS.companyName,
+    companyAddress: settings.companyAddress ?? DEFAULT_ADMIN_SETTINGS.companyAddress,
+    clientRecords: Array.isArray(settings.clientRecords) ? settings.clientRecords : [],
+  };
+
+  return {
+    ...merged,
+    clientRecords: migrateRecords(merged),
+  };
 }
 
 // ─── SubCard ──────────────────────────────────────────────────────────────────
@@ -370,10 +393,7 @@ interface AdminSettingsModalProps {
 }
 
 export default function AdminSettingsModal({ settings, onSave, onClose }: AdminSettingsModalProps) {
-  const [localSettings, setLocalSettings] = useState<AdminSettings>({
-    ...settings,
-    clientRecords: migrateRecords(settings),
-  });
+  const [localSettings, setLocalSettings] = useState<AdminSettings>(() => normalizeSettings(settings));
 
   const [showClientModal, setShowClientModal] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
@@ -386,6 +406,7 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
   const [excelImportLoading, setExcelImportLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const clientRecords = localSettings.clientRecords ?? [];
 
   // ── Client record handlers ──
 
@@ -402,9 +423,9 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
   };
 
   const handleDeleteClientRecord = (id: string) => {
-    const record = localSettings.clientRecords.find(r => r.id === id);
+    const record = clientRecords.find(r => r.id === id);
     if (!window.confirm(`¿Eliminar "${record?.name}" y todas sus sucursales?`)) return;
-    const updated = localSettings.clientRecords.filter(r => r.id !== id);
+    const updated = clientRecords.filter(r => r.id !== id);
     const { clients, branches } = syncLegacy(updated);
     setLocalSettings(prev => ({ ...prev, clientRecords: updated, clients, branches }));
   };
@@ -428,7 +449,7 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
     try {
       setExcelImportLoading(true);
       const imported = await importExcelToAdminData(file);
-      const combinedClients = Array.from(new Set([...localSettings.clients, ...imported.clients]));
+      const combinedClients = Array.from(new Set([...(localSettings.clients ?? []), ...imported.clients]));
       const combinedBranches = { ...localSettings.branches };
       Object.keys(imported.branches).forEach(client => {
         combinedBranches[client] = Array.from(new Set([
@@ -451,15 +472,16 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
     value: string, setter: (v: string) => void
   ) => {
     const t = value.trim();
-    if (!t || localSettings[field].includes(t)) return;
-    setLocalSettings(prev => ({ ...prev, [field]: [...prev[field], t] }));
+    const current = localSettings[field] ?? [];
+    if (!t || current.includes(t)) return;
+    setLocalSettings(prev => ({ ...prev, [field]: [...(prev[field] ?? []), t] }));
     setter("");
   };
 
   const deleteGenericItem = (
     field: "brands" | "refrigerants" | "equipmentTypes" | "techs",
     value: string
-  ) => setLocalSettings(prev => ({ ...prev, [field]: prev[field].filter(i => i !== value) }));
+  ) => setLocalSettings(prev => ({ ...prev, [field]: (prev[field] ?? []).filter(i => i !== value) }));
 
   const save = async () => {
     try {
@@ -569,7 +591,7 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
                 <Building className="w-4 h-4 text-blue-400" />
                 Clientes Registrados
                 <span className="text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded-full ml-1">
-                  {localSettings.clientRecords.length}
+                  {clientRecords.length}
                 </span>
               </h4>
               <button
@@ -579,13 +601,13 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
               </button>
             </div>
 
-            {localSettings.clientRecords.length === 0 ? (
+            {clientRecords.length === 0 ? (
               <div className="text-center py-10 border border-dashed border-zinc-800 rounded-xl text-zinc-600 text-xs italic">
                 No hay clientes registrados. Haz clic en "+ Nuevo Cliente" para agregar uno.
               </div>
             ) : (
               <div className="space-y-2">
-                {localSettings.clientRecords.map(cr => (
+                {clientRecords.map(cr => (
                   <div key={cr.id}
                     className="flex items-center justify-between px-4 py-3 bg-[#0f0f0f] border border-zinc-800 rounded-xl hover:border-zinc-700 transition group">
                     <div className="flex items-center gap-3 min-w-0">
@@ -654,7 +676,7 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
                       className="px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold cursor-pointer">+</button>
                   </div>
                   <div className="border border-zinc-800 rounded max-h-32 overflow-y-auto pr-1 text-[11px] bg-zinc-950">
-                    {localSettings[field].map(item => (
+                    {(localSettings[field] ?? []).map(item => (
                       <div key={item} className="flex justify-between items-center px-2 py-1 border-b border-zinc-900 last:border-0">
                         <span className="text-zinc-400 truncate max-w-[120px]">{item}</span>
                         <button onClick={() => deleteGenericItem(field, item)} className="text-rose-400 hover:scale-110 cursor-pointer shrink-0">×</button>
