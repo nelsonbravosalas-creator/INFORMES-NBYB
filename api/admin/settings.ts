@@ -6,6 +6,10 @@ import { sql, json, error, serverError } from "../_lib/db.js";
 import { authenticate } from "../_lib/auth.js";
 import { logAudit } from "../_lib/audit.js";
 
+function recordKey(record: any): string {
+  return String(record?.legacyId ?? record?.id ?? `cli_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+}
+
 export async function fetch(req: Request): Promise<Response> {
   const auth = authenticate(req);
   if (!auth) return error("No autenticado", 401);
@@ -24,12 +28,14 @@ export async function fetch(req: Request): Promise<Response> {
       // Combinar con clients/branches desde tablas relacionales
       const clients = await sql`
         SELECT
-          c.id, c.legacy_id AS "legacyId", c.name, c.address, c.region,
+          COALESCE(c.legacy_id, c.id::text) AS id, c.id AS "serverId", c.legacy_id AS "legacyId",
+          c.name, c.address, c.region,
           c.contact_person AS "contactPerson", c.contact_role AS "contactRole",
           c.contact_email AS "contactEmail", c.no_subs AS "noSubs",
           COALESCE(
             (SELECT json_agg(json_build_object(
-              'id', s.id, 'type', s.type, 'code', s.code, 'name', s.name,
+              'id', COALESCE(s.legacy_id, s.id::text), 'serverId', s.id, 'legacyId', s.legacy_id,
+              'type', s.type, 'code', s.code, 'name', s.name,
               'address', s.address, 'region', s.region, 'sameContact', s.same_contact,
               'contactPerson', s.contact_person, 'contactRole', s.contact_role,
               'contactEmail', s.contact_email
@@ -70,6 +76,77 @@ export async function fetch(req: Request): Promise<Response> {
           updated_at = now()
         WHERE id = 1
       `;
+
+      if (Array.isArray(body.clientRecords)) {
+        const records = body.clientRecords;
+        const existingClients = await sql`SELECT id, legacy_id AS "legacyId" FROM clients`;
+        const keptClientIds = new Set<string>();
+
+        for (const record of records) {
+          const key = recordKey(record);
+          const existing = existingClients.find((c: any) => c.legacyId === key || c.id === key);
+          const clientRows = existing
+            ? await sql`
+                UPDATE clients SET
+                  legacy_id = ${key},
+                  name = ${record.name ?? ""},
+                  address = ${record.address ?? null},
+                  region = ${record.region ?? null},
+                  contact_person = ${record.contactPerson ?? null},
+                  contact_role = ${record.contactRole ?? null},
+                  contact_email = ${record.contactEmail ?? null},
+                  no_subs = ${Boolean(record.noSubs)}
+                WHERE id = ${existing.id}::uuid
+                RETURNING id
+              `
+            : await sql`
+                INSERT INTO clients (
+                  legacy_id, name, address, region, contact_person, contact_role,
+                  contact_email, no_subs
+                )
+                VALUES (
+                  ${key}, ${record.name ?? ""}, ${record.address ?? null}, ${record.region ?? null},
+                  ${record.contactPerson ?? null}, ${record.contactRole ?? null},
+                  ${record.contactEmail ?? null}, ${Boolean(record.noSubs)}
+                )
+                RETURNING id
+              `;
+
+          const clientId = clientRows[0].id;
+          keptClientIds.add(clientId);
+
+          await sql`DELETE FROM sub_branches WHERE client_id = ${clientId}::uuid`;
+          if (!record.noSubs && Array.isArray(record.subs)) {
+            for (const sub of record.subs) {
+              await sql`
+                INSERT INTO sub_branches (
+                  legacy_id, client_id, type, code, name, address, region,
+                  same_contact, contact_person, contact_role, contact_email
+                )
+                VALUES (
+                  ${String(sub.legacyId ?? sub.id ?? `sub_${Date.now()}_${Math.random().toString(36).slice(2)}`)},
+                  ${clientId}::uuid,
+                  ${sub.type ?? "OTRO"},
+                  ${sub.code ?? ""},
+                  ${sub.name ?? ""},
+                  ${sub.address ?? null},
+                  ${sub.region ?? null},
+                  ${sub.sameContact ?? true},
+                  ${sub.contactPerson ?? null},
+                  ${sub.contactRole ?? null},
+                  ${sub.contactEmail ?? null}
+                )
+              `;
+            }
+          }
+        }
+
+        for (const existing of existingClients as any[]) {
+          if (!keptClientIds.has(existing.id)) {
+            await sql`DELETE FROM clients WHERE id = ${existing.id}::uuid`;
+          }
+        }
+      }
 
       await logAudit({
         userId: auth.sub, userName: auth.nombre, action: "update",

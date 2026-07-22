@@ -365,7 +365,7 @@ function ClientModal({
 
 interface AdminSettingsModalProps {
   settings: AdminSettings;
-  onSave: (updatedSettings: AdminSettings) => void;
+  onSave: (updatedSettings: AdminSettings) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -384,6 +384,7 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
   const [newTech, setNewTech] = useState("");
 
   const [excelImportLoading, setExcelImportLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // ── Client record handlers ──
@@ -460,7 +461,15 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
     value: string
   ) => setLocalSettings(prev => ({ ...prev, [field]: prev[field].filter(i => i !== value) }));
 
-  const save = () => { onSave(localSettings); onClose(); };
+  const save = async () => {
+    try {
+      setIsSaving(true);
+      await onSave(localSettings);
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // ── Render ──
 
@@ -665,9 +674,9 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold rounded-lg border border-zinc-700 cursor-pointer transition">
             Cancelar
           </button>
-          <button id="save-admin-settings" onClick={save}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition">
-            Guardar Cambios
+          <button id="save-admin-settings" onClick={save} disabled={isSaving}
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer transition">
+            {isSaving ? "Guardando..." : "Guardar Cambios"}
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React from "react";
 import { HVACReport, AdminSettings } from "../types";
-import { generatePDFReport, exportReportAsHTML } from "../utils/pdf";
+import { generatePDFReport, exportReportAsHTML, exportReportAsWord } from "../utils/pdf";
 import { calculateSatTemp } from "../utils/refrigerantPt";
 import { 
   X, FileText, Download, Edit3, Calendar, User, Mail, MapPin, 
@@ -824,6 +824,15 @@ export default function ReportViewerModal({ report, adminSettings, onClose, onEd
               className="flex items-center gap-1.5 px-4.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition cursor-pointer uppercase tracking-wider"
             >
               <Download className="w-4 h-4 text-blue-400" /> HTML Offline
+            </button>
+
+            <button
+              type="button"
+              id="view-modal-word-btn"
+              onClick={() => exportReportAsWord(report, adminSettings.companyName, adminSettings.logo)}
+              className="flex items-center gap-1.5 px-4.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition cursor-pointer uppercase tracking-wider"
+            >
+              <Download className="w-4 h-4 text-orange-400" /> Word
             </button>
           </div>
 

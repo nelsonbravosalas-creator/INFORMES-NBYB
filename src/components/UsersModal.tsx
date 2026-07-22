@@ -10,6 +10,7 @@ import { UsersAPI, ServerAppUser } from '../utils/api-client';
 interface UsersModalProps {
   onClose: () => void;
   currentUserId: string;
+  currentUserProfile: UserProfile;
 }
 
 /** Subconjunto común entre el usuario local (offline) y el que devuelve el servidor. */
@@ -73,7 +74,7 @@ const EMPTY_FORM: UserFormData = {
 
 type ModalView = 'list' | 'form';
 
-export default function UsersModal({ onClose, currentUserId }: UsersModalProps) {
+export default function UsersModal({ onClose, currentUserId, currentUserProfile }: UsersModalProps) {
   const [users, setUsers] = useState<DisplayUser[]>([]);
   const [view, setView] = useState<ModalView>('list');
   const [editingUser, setEditingUser] = useState<DisplayUser | null>(null);
@@ -82,6 +83,7 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const canManageUsers = currentUserProfile === 'administrador';
 
   useEffect(() => {
     loadUsers();
@@ -99,6 +101,10 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
   };
 
   const openCreate = () => {
+    if (!canManageUsers) {
+      alert('Solo un administrador puede crear usuarios.');
+      return;
+    }
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setError('');
@@ -149,13 +155,23 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
       // que lo hashea con bcrypt (ver api/users). El cliente ya no calcula
       // ni almacena el hash "de verdad".
       if (editingUser) {
+        if (!canManageUsers && editingUser.id !== currentUserId) {
+          setError('No tienes permisos para editar este usuario');
+          return;
+        }
+
         await UsersAPI.update(editingUser.id, {
           nombre: form.nombre.trim(),
-          perfil: form.perfil,
           clienteId: editingUser.clienteId,
+          ...(canManageUsers ? { perfil: form.perfil } : {}),
           ...(form.pin ? { pin: form.pin } : {}),
         });
       } else {
+        if (!canManageUsers) {
+          setError('Solo un administrador puede crear usuarios');
+          return;
+        }
+
         await UsersAPI.create({
           email: form.email.trim().toLowerCase(),
           nombre: form.nombre.trim(),
@@ -179,6 +195,10 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
   };
 
   const handleToggleActive = async (user: DisplayUser) => {
+    if (!canManageUsers) {
+      alert('Solo un administrador puede activar o desactivar usuarios.');
+      return;
+    }
     if (user.id === currentUserId) {
       alert('No puedes desactivarte a ti mismo.');
       return;
@@ -192,6 +212,10 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
   };
 
   const handleDelete = async (user: DisplayUser) => {
+    if (!canManageUsers) {
+      alert('Solo un administrador puede eliminar usuarios.');
+      return;
+    }
     if (user.id === currentUserId) {
       alert('No puedes eliminar tu propia cuenta.');
       return;
@@ -228,6 +252,9 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
               <p className="text-[10px] text-zinc-500 mt-0.5">
                 {view === 'list' ? `${users.length} usuario${users.length !== 1 ? 's' : ''} registrados` : 'Completa los datos del usuario'}
               </p>
+              {!canManageUsers && view === 'list' && (
+                <p className="text-[10px] text-amber-300 mt-0.5">Solo lectura: la creaciÃ³n y baja de usuarios requiere administrador</p>
+              )}
             </div>
           </div>
           <button
@@ -281,11 +308,12 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => handleToggleActive(user)}
+                        disabled={!canManageUsers || user.id === currentUserId}
                         className={`p-1.5 rounded-lg transition ${
                           user.activo
                             ? 'text-emerald-400 hover:bg-emerald-950/40'
                             : 'text-zinc-500 hover:bg-slate-700'
-                        }`}
+                        } disabled:opacity-20 disabled:cursor-not-allowed`}
                         title={user.activo ? 'Desactivar' : 'Activar'}
                       >
                         {user.activo
@@ -295,14 +323,15 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
                       </button>
                       <button
                         onClick={() => openEdit(user)}
-                        className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-950/30 rounded-lg transition"
+                        disabled={!canManageUsers && user.id !== currentUserId}
+                        className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-950/30 rounded-lg transition disabled:opacity-20 disabled:cursor-not-allowed"
                         title="Editar"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(user)}
-                        disabled={user.id === currentUserId}
+                        disabled={!canManageUsers || user.id === currentUserId}
                         className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition disabled:opacity-20 disabled:cursor-not-allowed"
                         title="Eliminar"
                       >
@@ -354,7 +383,9 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
                     value={form.email}
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                     placeholder="usuario@empresa.cl"
-                    className="w-full pl-9 pr-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 text-sm transition"
+                    disabled={Boolean(editingUser)}
+                    title={editingUser ? 'El correo no se modifica al editar un usuario' : undefined}
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 text-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -372,11 +403,12 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
                         key={profile}
                         type="button"
                         onClick={() => setForm(f => ({ ...f, perfil: profile }))}
+                        disabled={Boolean(editingUser) && !canManageUsers}
                         className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-all ${
                           form.perfil === profile
                             ? `${cfg.color} ring-1 ring-current`
                             : 'border-slate-600 text-zinc-400 hover:border-slate-500 bg-slate-700/30'
-                        }`}
+                        } disabled:opacity-60 disabled:cursor-not-allowed`}
                       >
                         <span className={form.perfil === profile ? '' : 'opacity-50'}>{cfg.icon}</span>
                         <span className="text-xs font-bold">{cfg.label}</span>
@@ -477,7 +509,9 @@ export default function UsersModal({ onClose, currentUserId }: UsersModalProps) 
               </button>
               <button
                 onClick={openCreate}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-lg shadow-violet-500/20"
+                disabled={!canManageUsers}
+                title={canManageUsers ? 'Crear usuario' : 'Solo un administrador puede crear usuarios'}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:from-zinc-700 disabled:to-zinc-700 disabled:text-zinc-400 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-lg shadow-violet-500/20 disabled:shadow-none disabled:cursor-not-allowed"
               >
                 <UserPlus className="w-4 h-4" />
                 Nuevo Usuario

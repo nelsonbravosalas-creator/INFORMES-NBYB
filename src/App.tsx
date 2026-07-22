@@ -9,7 +9,8 @@ import { initAutoSync, syncAll } from "./utils/sync";
 import { exportReportsToExcel } from "./utils/excel";
 import {
   generatePDFReport, exportReportAsJSON, exportReportAsHTML,
-  exportServiceOrderAsJSON, exportServiceOrderAsHTML, generateServiceOrderPDF,
+  exportReportAsWord, exportServiceOrderAsJSON, exportServiceOrderAsHTML,
+  exportServiceOrderAsWord, generateServiceOrderPDF,
 } from "./utils/pdf";
 import ReportForm from "./components/ReportForm";
 import ServiceOrderForm from "./components/ServiceOrderForm";
@@ -19,6 +20,7 @@ import ReportViewerModal from "./components/ReportViewerModal";
 import PWAInstallButton, { OnlineIndicator, PWAHeaderInstallButton } from "./components/PWAInstallButton";
 import LoginComponent from "./components/LoginComponent";
 import UsersModal from "./components/UsersModal";
+import { AdminAPI } from "./utils/api-client";
 import {
   Plus, Settings, FileSpreadsheet, Upload, Search, ClipboardList,
   Trash2, Edit3, Eye, FileText, Moon, Sun, ShieldAlert,
@@ -91,7 +93,11 @@ export default function App() {
       const reportsList = await getReports();
       setReports(reportsList);
 
-      const settings = await getAdminSettings();
+      const remoteSettings = await AdminAPI.get();
+      const settings = remoteSettings ?? await getAdminSettings();
+      if (remoteSettings) {
+        await saveAdminSettings(remoteSettings);
+      }
       setAdminSettings(settings);
 
       const orders = await getServiceOrders();
@@ -129,6 +135,23 @@ export default function App() {
       setIsAuthenticated(false);
       setCurrentUser(null);
       console.log('[App] User logged out');
+    }
+  };
+
+  const handleSaveAdminSettings = async (updatedSettings: AdminSettings) => {
+    await saveAdminSettings(updatedSettings);
+    setAdminSettings(updatedSettings);
+
+    const result = await AdminAPI.save(updatedSettings);
+    if (!result?.success) {
+      alert('Los cambios quedaron guardados en este dispositivo, pero no se pudieron sincronizar para otros usuarios. Verifica conexiÃ³n, sesiÃ³n y permisos de administrador.');
+      return;
+    }
+
+    const sharedSettings = await AdminAPI.get();
+    if (sharedSettings) {
+      await saveAdminSettings(sharedSettings);
+      setAdminSettings(sharedSettings);
     }
   };
 
@@ -375,10 +398,7 @@ export default function App() {
             report={activeReport}
             adminSettings={adminSettings}
             onSave={handleSaveReport}
-            onUpdateAdminSettings={async (updatedSettings) => {
-              await saveAdminSettings(updatedSettings);
-              setAdminSettings(updatedSettings);
-            }}
+            onUpdateAdminSettings={handleSaveAdminSettings}
             onClose={() => {
               setIsFormOpen(false);
               setActiveReport(null);
@@ -515,7 +535,7 @@ export default function App() {
                                 </button>
                                 {/* PDF */}
                                 <button
-                                  onClick={() => generateServiceOrderPDF(ot, adminSettings.companyName)}
+                                  onClick={() => generateServiceOrderPDF(ot, adminSettings.companyName, adminSettings.logo)}
                                   className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
                                   title="Generar PDF A4"
                                 >
@@ -528,6 +548,14 @@ export default function App() {
                                   title="Exportar HTML offline"
                                 >
                                   HTML
+                                </button>
+                                {/* WORD */}
+                                <button
+                                  onClick={() => exportServiceOrderAsWord(ot, adminSettings.companyName, adminSettings.logo)}
+                                  className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
+                                  title="Exportar Word"
+                                >
+                                  WORD
                                 </button>
                                 {/* JSON */}
                                 <button
@@ -721,6 +749,16 @@ export default function App() {
                                 HTML
                               </button>
 
+                              {/* WORD exporter button */}
+                              <button
+                                id={`exp-word-${item.id}`}
+                                onClick={() => exportReportAsWord(item, adminSettings.companyName, adminSettings.logo)}
+                                className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
+                                title="Exportar Word con el mismo formato"
+                              >
+                                WORD
+                              </button>
+
                               {/* JSON backup button */}
                               <button
                                 id={`exp-json-${item.id}`}
@@ -770,10 +808,7 @@ export default function App() {
       {isAdminOpen && (
         <AdminSettingsModal
           settings={adminSettings}
-          onSave={async (updatedSettings) => {
-            await saveAdminSettings(updatedSettings);
-            setAdminSettings(updatedSettings);
-          }}
+          onSave={handleSaveAdminSettings}
           onClose={() => setIsAdminOpen(false)}
         />
       )}
@@ -891,6 +926,7 @@ export default function App() {
       {isUsersOpen && isAdmin && currentUser && (
         <UsersModal
           currentUserId={currentUser.userId}
+          currentUserProfile={currentUser.perfil}
           onClose={() => setIsUsersOpen(false)}
         />
       )}

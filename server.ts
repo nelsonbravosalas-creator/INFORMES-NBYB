@@ -23,6 +23,115 @@ async function startServer() {
   app.use(express.json({ limit: "25mb" }));
   app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
+  async function sendWebResponse(res: express.Response, response: Response) {
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    res.status(response.status);
+    const body = await response.arrayBuffer();
+    res.send(Buffer.from(body));
+  }
+
+  function toWebRequest(req: express.Request): Request {
+    const protocol = req.protocol || "http";
+    const host = req.get("host") || `localhost:${PORT}`;
+    const url = `${protocol}://${host}${req.originalUrl}`;
+    const headers = new Headers();
+
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (Array.isArray(value)) {
+        headers.set(key, value.join(", "));
+      } else if (typeof value === "string") {
+        headers.set(key, value);
+      }
+    }
+
+    const hasBody = !["GET", "HEAD"].includes(req.method.toUpperCase());
+    return new Request(url, {
+      method: req.method,
+      headers,
+      body: hasBody ? JSON.stringify(req.body ?? {}) : undefined,
+    });
+  }
+
+  app.all("/api/auth/login", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/auth/login.js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/auth/login error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/users", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/users/index.js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/users error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/users/:id", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/users/[id].js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/users/:id error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/admin/settings", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/admin/settings.js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/admin/settings error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/reports", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/reports/index.js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/reports error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/reports/:id", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/reports/[id].js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/reports/:id error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/service-orders", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/service-orders/index.js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/service-orders error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
+  app.all("/api/service-orders/:id", async (req, res) => {
+    try {
+      const { fetch: handler } = await import("./api/service-orders/[id].js");
+      await sendWebResponse(res, await handler(toWebRequest(req)));
+    } catch (err) {
+      console.error("Local API /api/service-orders/:id error:", err);
+      res.status(500).json({ error: "Error interno del servidor. Intenta nuevamente." });
+    }
+  });
+
   // API Route for Gemini HVAC Nameplate OCR (réplica local de api/ocr.ts para `npm run dev`)
   app.post("/api/ocr", async (req, res) => {
     try {

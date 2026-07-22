@@ -6,7 +6,7 @@ import {
   ClipboardList, MapPin, User, Phone, Calendar, Wrench,
 } from "lucide-react";
 import {
-  exportServiceOrderAsHTML, exportServiceOrderAsJSON, generateServiceOrderPDF,
+  exportServiceOrderAsHTML, exportServiceOrderAsJSON, exportServiceOrderAsWord, generateServiceOrderPDF,
 } from "../utils/pdf";
 
 interface Props {
@@ -174,7 +174,7 @@ export default function ServiceOrderViewerModal({ order, adminSettings, onClose,
           <div className="flex items-center gap-2">
             {/* PDF */}
             <button
-              onClick={() => generateServiceOrderPDF(order, adminSettings.companyName)}
+              onClick={() => generateServiceOrderPDF(order, adminSettings.companyName, adminSettings.logo)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-bold border border-zinc-700 cursor-pointer transition"
               title="Exportar PDF A4">
               <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
@@ -185,6 +185,13 @@ export default function ServiceOrderViewerModal({ order, adminSettings, onClose,
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-bold border border-zinc-700 cursor-pointer transition"
               title="Exportar HTML offline">
               <FileCode className="w-3.5 h-3.5 text-blue-400" /> HTML
+            </button>
+            {/* WORD */}
+            <button
+              onClick={() => exportServiceOrderAsWord(order, adminSettings.companyName, adminSettings.logo)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-bold border border-zinc-700 cursor-pointer transition"
+              title="Exportar Word">
+              <FileText className="w-3.5 h-3.5 text-orange-400" /> WORD
             </button>
             {/* JSON */}
             <button

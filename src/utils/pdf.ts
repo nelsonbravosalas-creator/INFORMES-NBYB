@@ -3,13 +3,9 @@ import html2canvas from "html2canvas";
 import { HVACReport, ServiceOrderReport } from "../types";
 import { calculateSatTemp } from "./refrigerantPt";
 
-/**
- * Escapa entidades HTML. Los exportadores de abajo arman HTML por
- * concatenación de strings (para renderizarlo con html2canvas o descargarlo
- * como archivo) — sin esto, un folio/nombre/comentario con `<img onerror=...>`
- * (guardado antes de exigir autenticación en la API) se ejecutaría al
- * abrir el informe.
- */
+const A4_WIDTH_PX = 794;
+const A4_HEIGHT_PX = 1123;
+
 function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -20,1048 +16,721 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Clona un HVACReport escapando todos los campos de texto libre antes de interpolarlos en HTML. */
-function sanitizeReportForExport(report: HVACReport): HVACReport {
-  return {
-    ...report,
-    folio: escapeHtml(report.folio),
-    date: escapeHtml(report.date),
-    technicianName: escapeHtml(report.technicianName),
-    clientName: escapeHtml(report.clientName),
-    clientEmail: escapeHtml(report.clientEmail),
-    branchLocation: escapeHtml(report.branchLocation),
-    clientContactName: report.clientContactName ? escapeHtml(report.clientContactName) : report.clientContactName,
-    clientContactRole: report.clientContactRole ? escapeHtml(report.clientContactRole) : report.clientContactRole,
-    clientLocationAddress: report.clientLocationAddress ? escapeHtml(report.clientLocationAddress) : report.clientLocationAddress,
-    brand: escapeHtml(report.brand),
-    model: escapeHtml(report.model),
-    serialNumber: escapeHtml(report.serialNumber),
-    refrigerantType: escapeHtml(report.refrigerantType),
-    capacity: escapeHtml(report.capacity),
-    voltage: escapeHtml(report.voltage),
-    amperage: escapeHtml(report.amperage),
-    equipmentType: escapeHtml(report.equipmentType),
-    ambientTemp: escapeHtml(report.ambientTemp),
-    returnTemp: escapeHtml(report.returnTemp),
-    supplyTemp: escapeHtml(report.supplyTemp),
-    fanAmperage: escapeHtml(report.fanAmperage),
-    setPoint: report.setPoint ? escapeHtml(report.setPoint) : report.setPoint,
-    electricSchemeNote: report.electricSchemeNote ? escapeHtml(report.electricSchemeNote) : report.electricSchemeNote,
-    generalComments: escapeHtml(report.generalComments),
-    overallStatus: escapeHtml(report.overallStatus) as HVACReport["overallStatus"],
-    criticality: report.criticality ? (escapeHtml(report.criticality) as HVACReport["criticality"]) : report.criticality,
-    circuits: (report.circuits || []).map(c => ({
-      ...c,
-      name: escapeHtml(c.name),
-      refrigerantChargeInput: escapeHtml(c.refrigerantChargeInput),
-      status: escapeHtml(c.status) as typeof c.status,
-      suctionPressure: escapeHtml(c.suctionPressure),
-      dischargePressure: escapeHtml(c.dischargePressure),
-      superheat: escapeHtml(c.superheat),
-      subcooling: escapeHtml(c.subcooling),
-      compressors: (c.compressors || []).map(co => ({
-        ...co,
-        name: escapeHtml(co.name),
-        status: escapeHtml(co.status) as typeof co.status,
-        amperage: escapeHtml(co.amperage),
-        voltage: escapeHtml(co.voltage),
-        amperageR: co.amperageR ? escapeHtml(co.amperageR) : co.amperageR,
-        amperageS: co.amperageS ? escapeHtml(co.amperageS) : co.amperageS,
-        amperageT: co.amperageT ? escapeHtml(co.amperageT) : co.amperageT,
-      })),
-    })),
-    checklist: (report.checklist || []).map(chk => ({
-      ...chk,
-      category: escapeHtml(chk.category),
-      label: escapeHtml(chk.label),
-      status: escapeHtml(chk.status) as typeof chk.status,
-      notes: chk.notes ? escapeHtml(chk.notes) : chk.notes,
-      images: (chk.images || []).map(escapeHtml),
-    })),
-    signatures: report.signatures ? {
-      ...report.signatures,
-      technicianName: escapeHtml(report.signatures.technicianName),
-      technicianSignature: escapeHtml(report.signatures.technicianSignature),
-      clientName: escapeHtml(report.signatures.clientName),
-      clientSignature: escapeHtml(report.signatures.clientSignature),
-    } : report.signatures,
+function fileSafe(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_");
+}
+
+function formatDateCL(value?: string): string {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return escapeHtml(value);
+  return parsed.toLocaleDateString("es-CL");
+}
+
+function nl2br(value?: string): string {
+  return escapeHtml(value || "").replace(/\n/g, "<br>");
+}
+
+function statusLabel(status?: string): string {
+  const labels: Record<string, string> = {
+    excellent: "Excelente",
+    normal: "Operativo",
+    requires_action: "Requiere accion",
+    critical: "Critico",
   };
+  return labels[status || ""] ?? escapeHtml(status || "Sin estado");
 }
 
-/** Clona un ServiceOrderReport escapando todos los campos de texto libre antes de interpolarlos en HTML. */
-function sanitizeOrderForExport(order: ServiceOrderReport): ServiceOrderReport {
-  return {
-    ...order,
-    folio: escapeHtml(order.folio),
-    date: escapeHtml(order.date),
-    technicianName: escapeHtml(order.technicianName),
-    orderNumber: escapeHtml(order.orderNumber),
-    serviceType: escapeHtml(order.serviceType) as ServiceOrderReport["serviceType"],
-    diagnosticRating: escapeHtml(order.diagnosticRating) as ServiceOrderReport["diagnosticRating"],
-    clientName: escapeHtml(order.clientName),
-    branchLocation: escapeHtml(order.branchLocation),
-    clientContactName: escapeHtml(order.clientContactName),
-    clientContactRole: escapeHtml(order.clientContactRole),
-    clientLocationAddress: escapeHtml(order.clientLocationAddress),
-    findings: escapeHtml(order.findings),
-    conclusions: escapeHtml(order.conclusions),
-    evidence: (order.evidence || []).map(p => ({
-      ...p,
-      imageBase64: escapeHtml(p.imageBase64),
-      description: escapeHtml(p.description),
-    })),
-    signatures: order.signatures ? {
-      ...order.signatures,
-      technicianName: escapeHtml(order.signatures.technicianName),
-      technicianSignature: escapeHtml(order.signatures.technicianSignature),
-      clientName: escapeHtml(order.signatures.clientName),
-      clientSignature: escapeHtml(order.signatures.clientSignature),
-    } : order.signatures,
+function criticalityLabel(value?: string): string {
+  const labels: Record<string, string> = {
+    altamente_critico: "Altamente critico",
+    critico: "Critico",
+    no_critico: "No critico",
   };
+  return labels[value || ""] ?? escapeHtml(value || "No definida");
 }
 
-/**
- * Downloads a raw JSON file of the HVAC report for backup or local import
- */
-export function exportReportAsJSON(report: HVACReport) {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-  const downloadAnchor = document.createElement("a");
-  downloadAnchor.setAttribute("href", dataStr);
-  downloadAnchor.setAttribute("download", `HVAC_Report_${report.folio}.json`);
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
+function serviceTypeLabel(value?: string): string {
+  const labels: Record<string, string> = {
+    preventivo: "Mantenimiento preventivo",
+    correctivo: "Mantenimiento correctivo",
+    urgencia: "Atencion de urgencia",
+    garantia: "Garantia de servicio",
+    puesta_marcha: "Puesta en marcha",
+  };
+  return labels[value || ""] ?? escapeHtml(value || "Servicio tecnico");
 }
 
-/**
- * Downloads report as formatted raw HTML offline file
- */
-export function exportReportAsHTML(report: HVACReport, companyName: string) {
-  report = sanitizeReportForExport(report);
-  companyName = escapeHtml(companyName);
-  const htmlContent = `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Informe de Servicio HVAC - Folio ${report.folio}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px; line-height: 1.5; }
-    .report-card { max-width: 850px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-    .header { display: flex; justify-between; align-items: center; border-bottom: 2px solid #6366f1; padding-bottom: 16px; margin-bottom: 24px; }
-    .title { font-size: 24px; font-weight: bold; color: #4338ca; margin: 0; }
-    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; background: #f1f5f9; padding: 16px; border-radius: 8px; }
-    .meta-item { font-size: 13px; }
-    .meta-label { font-weight: bold; color: #475569; }
-    .section-title { font-size: 16px; font-weight: bold; color: #1e1b4b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 28px 0 12px 0; }
-    .spec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .spec-card { background: #fafafa; border: 1px solid #f1f5f9; padding: 10px; border-radius: 6px; font-size: 12px; }
-    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-    .status-excellent { background: #d1fae5; color: #065f46; }
-    .status-normal { background: #e0f2fe; color: #0369a1; }
-    .status-requires_action { background: #fef3c7; color: #92400e; }
-    .status-critical { background: #fee2e2; color: #991b1b; }
-    .checklist-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-    .checklist-table th, .checklist-table td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
-    .checklist-table th { background: #f8fafc; font-weight: bold; }
-    .pics-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .evidence-img { width: 240px; height: 240px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
-    .circuit-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 12px; }
-    .sig-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-top: 40px; }
-    .sig-box { border-top: 1px solid #94a3b8; text-align: center; padding-top: 8px; font-size: 13px; font-weight: bold; color: #475569; }
-    .sig-img { max-height: 80px; max-width: 180px; display: block; margin: 0 auto; margin-bottom: 8px; }
-  </style>
-</head>
-<body>
-  <div class="report-card">
-    <div class="header">
-      <div>
-        <div class="title">${companyName}</div>
-        <div style="font-size: 12px; color: #64748b;">Informe de Servicio Técnico HVAC Automatizado</div>
-      </div>
-      <div style="text-align: right;">
-        <div style="font-weight: bold; color: #6366f1;">FOLIO: ${report.folio}</div>
-        <div style="font-size: 12px; color: #64748b;">Fecha: ${report.date}</div>
-      </div>
-    </div>
-
-    <div class="meta-grid">
-      <div class="meta-item"><span class="meta-label">Cliente:</span> ${report.clientName}</div>
-      <div class="meta-item"><span class="meta-label">Sucursal:</span> ${report.branchLocation}</div>
-      <div class="meta-item"><span class="meta-label">Correo Electrónico:</span> ${report.clientEmail}</div>
-      <div class="meta-item"><span class="meta-label">Técnico Asignado:</span> ${report.technicianName}</div>
-    </div>
-
-    <div class="section-title">Especificaciones del Equipo</div>
-    <div class="spec-grid">
-      <div class="spec-card"><strong>Marca:</strong> ${report.brand}</div>
-      <div class="spec-card"><strong>Modelo:</strong> ${report.model}</div>
-      <div class="spec-card"><strong>Nº de Serie:</strong> ${report.serialNumber}</div>
-      <div class="spec-card"><strong>Refrigerante:</strong> ${report.refrigerantType}</div>
-      <div class="spec-card"><strong>Capacidad:</strong> ${report.capacity}</div>
-      <div class="spec-card"><strong>Alimentación Eléctrica:</strong> ${report.voltage}</div>
-      <div class="spec-card"><strong>Amperaje Nominal:</strong> ${report.amperage}</div>
-      <div class="spec-card"><strong>Tipo de Unidad:</strong> ${report.equipmentType}</div>
-      <div class="spec-card">
-        <strong>Criticidad:</strong>
-        <span style="font-weight: bold; color: ${
-          report.criticality === "altamente_critico" 
-            ? "#dc2626" 
-            : report.criticality === "critico" 
-              ? "#d97706" 
-              : "#059669"
-        };">${
-          report.criticality === "altamente_critico" 
-            ? "🔴 Altamente Crítico" 
-            : report.criticality === "critico" 
-              ? "🟡 Crítico" 
-              : "🟢 No Crítico"
-        }</span>
-      </div>
-      <div class="spec-card">
-        <strong>Estado de Operación:</strong> 
-        <span class="status-badge status-${report.overallStatus}">${report.overallStatus}</span>
-      </div>
-    </div>
-
-    <div class="section-title">Mediciones Mecánicas y Eléctricas</div>
-    <div class="spec-grid">
-      <div class="spec-card"><strong>Temp. Ambiente:</strong> ${report.ambientTemp}</div>
-      <div class="spec-card"><strong>Temp. Retorno:</strong> ${report.returnTemp}</div>
-      <div class="spec-card"><strong>Temp. Inyección:</strong> ${report.supplyTemp}</div>
-      <div class="spec-card"><strong>Set Point:</strong> ${report.setPoint || "N/D"}</div>
-      <div class="spec-card"><strong>Amperaje Turbina (Fan):</strong> ${report.fanAmperage} A</div>
-    </div>
-
-    <div class="section-title">Circuitos Refrigerantes y Compresores</div>
-    ${(report.circuits || []).map(crt => {
-      const gasType = report.refrigerantType || "R410A";
-      const LP_Raw = crt.suctionPressure.replace(/[^\d.-]/g, "");
-      const LP_Val = parseFloat(LP_Raw) || 0;
-      const LP_IsBar = crt.suctionPressure.toLowerCase().includes("bar") || LP_Val < 35;
-      const LP_Unit = LP_IsBar ? "bar" : "psi";
-      const evapTemp = calculateSatTemp(gasType, LP_Val, LP_Unit);
-
-      const HP_Raw = crt.dischargePressure.replace(/[^\d.-]/g, "");
-      const HP_Val = parseFloat(HP_Raw) || 0;
-      const HP_IsBar = crt.dischargePressure.toLowerCase().includes("bar") || HP_Val < 70;
-      const HP_Unit = HP_IsBar ? "bar" : "psi";
-      const condTemp = calculateSatTemp(gasType, HP_Val, HP_Unit);
-
-      return `
-        <div class="circuit-card">
-          <div style="font-weight: bold; display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px;">
-            <span>${crt.name} (Gas: ${crt.refrigerantChargeInput})</span>
-            <span style="color: #4338ca;">LP: ${LP_Val} ${LP_Unit} (${evapTemp.toFixed(1).replace(".", ",")} °C) / HP: ${HP_Val} ${HP_Unit} (${condTemp.toFixed(1).replace(".", ",")} °C)</span>
-          </div>
-          <div style="display: flex; gap: 20px; color: #64748b; margin-bottom: 8px;">
-            <span>Sobrecalentamiento: ${crt.superheat} °K</span>
-            <span>Subenfriamiento: ${crt.subcooling} °K</span>
-          </div>
-          <strong>Compresores:</strong>
-          <ul style="margin: 4px 0 0 0; padding-left: 20px;">
-            ${crt.compressors.map(co => {
-              const isTrifasico = co.phaseType === "trifasico";
-              const ampStr = isTrifasico 
-                ? `R: ${co.amperageR || co.amperage}A, S: ${co.amperageS || co.amperage}A, T: ${co.amperageT || co.amperage}A (Trifásico)`
-                : `${co.amperage}A (Monofásico)`;
-              return `
-                <li>${co.name} - Amperaje: ${ampStr}, Voltaje: ${co.voltage}V [Estado: <strong>${co.status}</strong>]</li>
-              `;
-            }).join("")}
-          </ul>
-        </div>
-      `;
-    }).join("")}
-
-    <div class="section-title" style="page-break-before: always;">Gráficos de Manómetro Digital (testo Smart Probes)</div>
-    <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 24px;">
-      ${(report.circuits || []).map(crt => {
-        const gasType = report.refrigerantType || "R410A";
-        const LP_Raw = crt.suctionPressure.replace(/[^\d.-]/g, "");
-        const LP_Val = parseFloat(LP_Raw) || 0;
-        const LP_IsBar = crt.suctionPressure.toLowerCase().includes("bar") || LP_Val < 35;
-        const LP_Unit = LP_IsBar ? "bar" : "psi";
-        const evapTemp = calculateSatTemp(gasType, LP_Val, LP_IsBar ? "bar" : "psi");
-
-        const HP_Raw = crt.dischargePressure.replace(/[^\d.-]/g, "");
-        const HP_Val = parseFloat(HP_Raw) || 0;
-        const HP_IsBar = crt.dischargePressure.toLowerCase().includes("bar") || HP_Val < 70;
-        const HP_Unit = HP_IsBar ? "bar" : "psi";
-        const condTemp = calculateSatTemp(gasType, HP_Val, HP_IsBar ? "bar" : "psi");
-
-        // LP gauge math
-        const LP_Min = LP_IsBar ? -1 : -10;
-        const LP_Max = LP_IsBar ? 25 : 120;
-        const LP_Percent = Math.min(100, Math.max(0, ((LP_Val - LP_Min) / (LP_Max - LP_Min)) * 100));
-        const LP_Offset = 160 - (160 * (LP_Percent / 100));
-
-        // HP gauge math
-        const HP_Min = HP_IsBar ? -1 : -10;
-        const HP_Max = HP_IsBar ? 60 : 400;
-        const HP_Percent = Math.min(100, Math.max(0, ((HP_Val - HP_Min) / (HP_Max - HP_Min)) * 100));
-        const HP_Offset = 160 - (160 * (HP_Percent / 100));
-
-        const fmtDec = (v: number, d = 1) => v.toFixed(d).replace(".", ",");
-
-        return `
-          <div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; background: #ffffff; page-break-inside: avoid; box-sizing: border-box;">
-            <div style="font-weight: bold; font-size: 13px; color: #1e1b4b; border-bottom: 2px solid #5356f1; padding-bottom: 6px; margin-bottom: 16px; display: flex; justify-content: space-between;">
-              <span>Circuito: ${crt.name}</span>
-              <span style="color: #64748b; font-size: 11px;">Refrigerante: ${crt.refrigerantChargeInput || report.refrigerantType}</span>
-            </div>
-            <div style="display: flex; gap: 24px; justify-content: center; align-items: center; flex-wrap: wrap;">
-              <!-- Low Pressure -->
-              <div style="flex: 1; min-width: 250px; max-width: 320px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px; font-weight: bold; font-size: 10px; color: #5e7185;">
-                  <span>testo 549i (Baja Presión)</span>
-                  <span>• 070</span>
-                </div>
-                <div style="position: relative; width: 140px; height: 120px; margin: 0 auto;">
-                  <svg width="140" height="120" viewBox="0 0 100 100" style="display: block; margin: 0 auto;">
-                    <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="rgba(194, 215, 229, 0.4)" stroke-width="5" fill="none" stroke-linecap="round" />
-                    <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="#0c6496" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="160" stroke-dashoffset="${LP_Offset}" />
-                    <text x="25" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${LP_Min}</text>
-                    <text x="75" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${LP_Max}</text>
-                  </svg>
-                  <div style="position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: -5px;">
-                    <span style="font-size: 18px; font-weight: bold; color: #102435; font-family: sans-serif;">${fmtDec(LP_Val, LP_IsBar ? 2 : 1)}</span>
-                    <span style="font-size: 9px; color: #5e7185; font-weight: bold; font-family: sans-serif; margin-top: 2px;">${LP_Unit}</span>
-                  </div>
-                </div>
-                <div style="border-top: 1px solid #f1f5f9; padding-top: 8px; margin-top: 0px;">
-                  <div style="font-size: 10px; color: #5e7185; font-family: sans-serif;">Temp. Evaporación</div>
-                  <div style="font-size: 18px; font-weight: bold; color: #0c6496; font-family: sans-serif; margin-top: 2px;">${fmtDec(evapTemp, 1)} <span style="font-size: 12px;">°C</span></div>
-                </div>
-              </div>
-
-              <!-- High Pressure -->
-              <div style="flex: 1; min-width: 250px; max-width: 320px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px; font-weight: bold; font-size: 10px; color: #5e7185;">
-                  <span>testo 549i (Alta Presión)</span>
-                  <span>• 008</span>
-                </div>
-                <div style="position: relative; width: 140px; height: 120px; margin: 0 auto;">
-                  <svg width="140" height="120" viewBox="0 0 100 100" style="display: block; margin: 0 auto;">
-                    <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="rgba(251, 226, 228, 0.45)" stroke-width="5" fill="none" stroke-linecap="round" />
-                    <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="#e3373b" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="160" stroke-dashoffset="${HP_Offset}" />
-                    <text x="25" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${HP_Min}</text>
-                    <text x="75" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${HP_Max}</text>
-                  </svg>
-                  <div style="position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: -5px;">
-                    <span style="font-size: 18px; font-weight: bold; color: #102435; font-family: sans-serif;">${fmtDec(HP_Val, HP_IsBar ? 2 : 1)}</span>
-                    <span style="font-size: 9px; color: #5e7185; font-weight: bold; font-family: sans-serif; margin-top: 2px;">${HP_Unit}</span>
-                  </div>
-                </div>
-                <div style="border-top: 1px solid #f1f5f9; padding-top: 8px; margin-top: 0px;">
-                  <div style="font-size: 10px; color: #5e7185; font-family: sans-serif;">Temp. Condensación</div>
-                  <div style="font-size: 18px; font-weight: bold; color: #102435; font-family: sans-serif; margin-top: 2px;">${fmtDec(condTemp, 1)} <span style="font-size: 12px;">°C</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("")}
-    </div>
-
-    <div class="section-title">Chequeo Técnico de Mantenimiento</div>
-    <table class="checklist-table">
-      <thead>
-        <tr>
-          <th>Punto de Control</th>
-          <th>Estado</th>
-          <th>Observaciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${(report.checklist || []).filter(chk => chk.status !== "na").map(chk => `
-          <tr>
-            <td><strong>${chk.label}</strong><br><span style="color:#64748b; font-size:10px;">${chk.category}</span></td>
-            <td><strong style="color: ${chk.status === "cumple" ? "#10b981" : chk.status === "no_cumple" ? "#f43f5e" : "#64748b"}">${chk.status.toUpperCase()}</strong></td>
-            <td>
-              ${chk.notes || "Sin observaciones"}
-              ${chk.images && chk.images.length > 0 ? `
-                <div class="pics-container">
-                  ${chk.images.map(img => `<img class="evidence-img" src="${img}" />`).join("")}
-                </div>
-              ` : ""}
-            </td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-
-    <div class="section-title">Comentarios Generales y Diagnóstico</div>
-    <div style="font-size: 13px; background: #fafafa; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${report.generalComments || "Sin comentarios adicionales registrados."}</div>
-
-    <div class="sig-grid">
-      <div class="sig-box">
-        ${report.signatures?.technicianSignature ? `<img class="sig-img" src="${report.signatures.technicianSignature}" />` : `<div style="height: 80px; display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 11px;">Firma no registrada</div>`}
-        Técnico de Servicio<br>
-        <span style="font-size: 11px; font-weight: normal; color: #94a3b8;">${report.signatures?.technicianName || report.technicianName}</span>
-      </div>
-      <div class="sig-box">
-        ${report.signatures?.clientSignature ? `<img class="sig-img" src="${report.signatures.clientSignature}" />` : `<div style="height: 80px; display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 11px;">Firma no registrada</div>`}
-        Representante del Cliente<br>
-        <span style="font-size: 11px; font-weight: normal; color: #94a3b8;">${report.signatures?.clientName || report.clientName}</span>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-
-  const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-  const downloadAnchor = document.createElement("a");
-  downloadAnchor.setAttribute("href", URL.createObjectURL(blob));
-  downloadAnchor.setAttribute("download", `HVAC_Report_${report.folio}.html`);
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
-}
-
-/**
- * Creates high-fidelity beautiful PDF file from a compiled DOM tree
- * using custom scaling algorithm for high-DPI retina display
- */
-export async function generatePDFReport(report: HVACReport, companyName: string, companyLogo: string): Promise<boolean> {
-  report = sanitizeReportForExport(report);
-  companyName = escapeHtml(companyName);
-  companyLogo = escapeHtml(companyLogo);
-  // Let's create an offscreen modal structure with gorgeous layout so html2canvas renders it absolutely perfectly in 1:1 format
-  const pdfContainer = document.createElement("div");
-  pdfContainer.id = `temp-pdf-render-root`;
-  pdfContainer.style.position = "absolute";
-  pdfContainer.style.left = "-9999px";
-  pdfContainer.style.top = "0";
-  pdfContainer.style.width = "820px";
-  pdfContainer.style.minHeight = "1120px";
-  pdfContainer.style.background = "#ffffff";
-  pdfContainer.style.color = "#121824";
-  pdfContainer.style.padding = "0px";
-  pdfContainer.style.fontFamily = "Helvetica, Arial, sans-serif";
-
-  // Formatted HTML template to render inside off-screen container
-  pdfContainer.innerHTML = `
-    <!-- PAGE 1 WRAPPER -->
-    <div style="box-sizing: border-box; width: 820px; min-height: 1160px; padding: 40px; background: #ffffff; display: flex; flex-direction: column; justify-content: flex-start;">
-      <!-- HEADER -->
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 16px; margin-bottom: 24px;">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        ${companyLogo ? `<img src="${companyLogo}" style="height: 48px; max-width: 140px; object-fit: contain;" />` : `<div style="background: #4f46e5; color: white; border-radius: 8px; width: 44px; height: 44px; font-weight: bold; font-size: 20px; display: flex; align-items: center; justify-content: center; font-family: sans-serif;">H</div>`}
-        <div>
-          <h1 style="font-size: 18px; margin: 0; font-weight: bold; color: #1e1b4b;">${companyName}</h1>
-          <p style="font-size: 10px; margin: 2px 0 0 0; color: #64748b;">REPORTE TÉCNICO PROFESIONAL HVAC</p>
-        </div>
-      </div>
-      <div style="text-align: right;">
-        <span style="font-size: 15px; font-weight: bold; color: #4f46e5; display: block;">FOLIO: ${report.folio}</span>
-        <span style="font-size: 11px; color: #475569; font-weight: bold;">FECHA: ${report.date}</span>
-      </div>
-    </div>
-
-    <!-- CLIENT AND LOCATION Spec -->
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 20px; font-size: 11.5px;">
-      <div><span style="color: #64748b; font-weight: bold;">Cliente:</span> <span style="font-weight: 500;">${report.clientName}</span></div>
-      <div><span style="color: #64748b; font-weight: bold;">Sucursal / Área:</span> <span style="font-weight: 500;">${report.branchLocation}</span></div>
-      <div><span style="color: #64748b; font-weight: bold;">Correo de Envío:</span> <span style="font-weight: 500;">${report.clientEmail}</span></div>
-      <div><span style="color: #64748b; font-weight: bold;">Técnico Operador:</span> <span style="font-weight: 500;">${report.technicianName}</span></div>
-    </div>
-
-    <!-- TECHNICAL DATASHEETS -->
-    <div style="margin-bottom: 20px;">
-      <h3 style="font-size: 12px; font-weight: bold; color: #3730a3; margin: 0 0 10px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">1. Ficha Técnica de la Unidad</h3>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 10.5px;">
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">TIPO EQUIPO</span>
-          <strong>${report.equipmentType}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">MARCA EQUIPO</span>
-          <strong>${report.brand}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">MODELO</span>
-          <strong>${report.model}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">Nº SERIE</span>
-          <strong style="word-break: break-all;">${report.serialNumber}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">REFRIGERANTE</span>
-          <strong>${report.refrigerantType}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">CAPACIDAD</span>
-          <strong>${report.capacity}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">VOLTAJE PLANTA</span>
-          <strong>${report.voltage}</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px;">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">AMPERAJE NOM.</span>
-          <strong>${report.amperage} A</strong>
-        </div>
-        <div style="background: #fafafa; border: 1px solid #f1f5f9; padding: 8px; border-radius: 6px; ${
-          report.criticality === "altamente_critico" 
-            ? "background: #fef2f2; border-color: #fca5a5;" 
-            : report.criticality === "critico" 
-              ? "background: #fffbeb; border-color: #fde68a;" 
-              : ""
-        }">
-          <span style="display: block; color: #64748b; font-size: 9px; font-weight: bold;">CRITICIDAD</span>
-          <strong style="color: ${
-            report.criticality === "altamente_critico" 
-              ? "#dc2626" 
-              : report.criticality === "critico" 
-                ? "#d97706" 
-                : "#059669"
-          };">${
-            report.criticality === "altamente_critico" 
-              ? "🔴 Altamente Crítico" 
-              : report.criticality === "critico" 
-                ? "🟡 Crítico" 
-                : "🟢 No Crítico"
-          }</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- MEASUREMENTS AND OPERATION STATUS -->
-    <div style="margin-bottom: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-      <div>
-        <h3 style="font-size: 11px; font-weight: bold; color: #3730a3; margin: 0 0 8px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase;">2. Mediciones Operacionales</h3>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px;">
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px;">Temp. Ambiente: <strong>${report.ambientTemp}</strong></div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px;">Temp. Retorno: <strong>${report.returnTemp}</strong></div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px;">Temp. Inyección: <strong>${report.supplyTemp}</strong></div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px;">Set Point: <strong>${report.setPoint || "N/D"}</strong></div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px;">Amp Fan Turbina: <strong>${report.fanAmperage} A</strong></div>
-        </div>
-      </div>
-      <div>
-        <h3 style="font-size: 11px; font-weight: bold; color: #3730a3; margin: 0 0 8px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase;">3. Diagnóstico del Sistema</h3>
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; height: 50px;">
-          <span style="font-size: 11px; font-weight: bold; color: #475569;">Calidad de Operación General:</span>
-          <span style="font-size: 11px; font-weight: bold; background: ${report.overallStatus === "excellent" ? "#d1fae5" : report.overallStatus === "normal" ? "#e0f2fe" : report.overallStatus === "requires_action" ? "#fef3c7" : "#fee2e2"}; color: ${report.overallStatus === "excellent" ? "#065f46" : report.overallStatus === "normal" ? "#0369a1" : report.overallStatus === "requires_action" ? "#92400e" : "#991b1b"}; padding: 4px 10px; border-radius: 12px; text-transform: uppercase;">
-            ${report.overallStatus === "excellent" ? "Excelente" : report.overallStatus === "normal" ? "Operativo" : report.overallStatus === "requires_action" ? "Alerta" : "Falla Crítica"}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- CIRCUITS BLOCK -->
-    <div style="margin-bottom: 20px;">
-      <h3 style="font-size: 12px; font-weight: bold; color: #3730a3; margin: 0 0 10px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">4. Registro e Inspección de Circuitos</h3>
-      ${(report.circuits || []).length === 0 ? `<p style="font-size: 10px; color:#94a3b8; font-style:italic;">No se registraron circuitos mecánicos en este informe.</p>` : `
-        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-          ${report.circuits.map(crt => {
-            const gasType = report.refrigerantType || "R410A";
-            const LP_Raw = crt.suctionPressure.replace(/[^\d.-]/g, "");
-            const LP_Val = parseFloat(LP_Raw) || 0;
-            const LP_IsBar = crt.suctionPressure.toLowerCase().includes("bar") || LP_Val < 35;
-            const LP_Unit = LP_IsBar ? "bar" : "psi";
-            const evapTemp = calculateSatTemp(gasType, LP_Val, LP_Unit);
-
-            const HP_Raw = crt.dischargePressure.replace(/[^\d.-]/g, "");
-            const HP_Val = parseFloat(HP_Raw) || 0;
-            const HP_IsBar = crt.dischargePressure.toLowerCase().includes("bar") || HP_Val < 70;
-            const HP_Unit = HP_IsBar ? "bar" : "psi";
-            const condTemp = calculateSatTemp(gasType, HP_Val, HP_Unit);
-
-            return `
-              <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 10px; background: #ffffff;">
-                <div style="font-weight: bold; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; color: #1e1b4b;">
-                  <span>${crt.name} [Gas: ${crt.refrigerantChargeInput}]</span>
-                  <span style="text-transform: uppercase; font-size: 8px; color: ${crt.status === "active" ? "#10b981" : "#f59e0b"};">${crt.status}</span>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 6px;">
-                  <div>Presión Baja: <strong>${LP_Val} ${LP_Unit}</strong></div>
-                  <div>Presión Alta: <strong>${HP_Val} ${HP_Unit}</strong></div>
-                  <div>T. Evaporación: <strong>${evapTemp.toFixed(1).replace(".", ",")} °C</strong></div>
-                  <div>T. Condensación: <strong>${condTemp.toFixed(1).replace(".", ",")} °C</strong></div>
-                  <div>Sobrecalentar (SH): <strong>${crt.superheat} °K</strong></div>
-                  <div>Subenfriar (SC): <strong>${crt.subcooling} °K</strong></div>
-                </div>
-                <strong style="color: #475569; display: block; font-size: 8.5px; border-bottom: 1px dashed #f1f5f9; padding-bottom: 2px; margin-bottom: 4px;">Medición de Compresores:</strong>
-                ${crt.compressors.map(co => {
-                  const isTrifasico = co.phaseType === "trifasico";
-                  const ampStr = isTrifasico 
-                    ? `R:${co.amperageR || co.amperage} S:${co.amperageS || co.amperage} T:${co.amperageT || co.amperage}`
-                    : `${co.amperage}A`;
-                  return `
-                    <div style="display: flex; justify-content: space-between; font-size: 8.2px; color: #475569; margin-bottom: 2px;">
-                      <span>• ${co.name} (${co.status === "active" ? "Marcha" : "Parada"})</span>
-                      <span>Amp: <strong>${ampStr}</strong> / Vol: <strong>${co.voltage}V</strong></span>
-                    </div>
-                  `;
-                }).join("")}
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `}
-    </div>
-    </div> <!-- END PAGE 1 WRAPPER -->
-
-    <!-- PAGE 2 WRAPPER -->
-    <div style="box-sizing: border-box; width: 820px; min-height: 1160px; padding: 40px; background: #ffffff; display: flex; flex-direction: column; justify-content: flex-start; page-break-before: always;">
-      <!-- GAUGE CHARTS (PAGE 2) -->
-      <div style="margin-bottom: 24px;">
-        <h3 style="font-size: 12px; font-weight: bold; color: #3730a3; margin: 0 0 10px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">5. Gráficos de Manómetro Digital (testo Smart Probes)</h3>
-      <div style="display: flex; flex-direction: column; gap: 16px;">
-        ${(report.circuits || []).map(crt => {
-          const gasType = report.refrigerantType || "R410A";
-          const LP_Raw = crt.suctionPressure.replace(/[^\d.-]/g, "");
-          const LP_Val = parseFloat(LP_Raw) || 0;
-          const LP_IsBar = crt.suctionPressure.toLowerCase().includes("bar") || LP_Val < 35;
-          const LP_Unit = LP_IsBar ? "bar" : "psi";
-          const evapTemp = calculateSatTemp(gasType, LP_Val, LP_IsBar ? "bar" : "psi");
-
-          const HP_Raw = crt.dischargePressure.replace(/[^\d.-]/g, "");
-          const HP_Val = parseFloat(HP_Raw) || 0;
-          const HP_IsBar = crt.dischargePressure.toLowerCase().includes("bar") || HP_Val < 70;
-          const HP_Unit = HP_IsBar ? "bar" : "psi";
-          const condTemp = calculateSatTemp(gasType, HP_Val, HP_IsBar ? "bar" : "psi");
-
-          // LP gauge math
-          const LP_Min = LP_IsBar ? -1 : -10;
-          const LP_Max = LP_IsBar ? 25 : 120;
-          const LP_Percent = Math.min(100, Math.max(0, ((LP_Val - LP_Min) / (LP_Max - LP_Min)) * 100));
-          const LP_Offset = 160 - (160 * (LP_Percent / 100));
-
-          // HP gauge math
-          const HP_Min = HP_IsBar ? -1 : -10;
-          const HP_Max = HP_IsBar ? 60 : 400;
-          const HP_Percent = Math.min(100, Math.max(0, ((HP_Val - HP_Min) / (HP_Max - HP_Min)) * 100));
-          const HP_Offset = 160 - (160 * (HP_Percent / 100));
-
-          const fmtDec = (v: number, d = 1) => v.toFixed(d).replace(".", ",");
-
-          return `
-            <div style="border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; background: #ffffff; page-break-inside: avoid; box-sizing: border-box;">
-              <div style="font-weight: bold; font-size: 11px; color: #1e1b4b; border-bottom: 2.5px solid #4f46e5; padding-bottom: 4px; margin-bottom: 12px; display: flex; justify-content: space-between;">
-                <span>Circuito: ${crt.name}</span>
-                <span style="color: #64748b; font-size: 9.5px;">Refrigerante: ${crt.refrigerantChargeInput || report.refrigerantType}</span>
-              </div>
-              <div style="display: flex; gap: 20px; justify-content: center; align-items: center;">
-                <!-- Low Pressure -->
-                <div style="flex: 1; min-width: 320px; max-width: 350px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px; font-weight: bold; font-size: 9.5px; color: #5e7185;">
-                    <span>testo 549i (Baja Presión)</span>
-                    <span>• 070</span>
-                  </div>
-                  <div style="position: relative; width: 140px; height: 120px; margin: 0 auto;">
-                    <svg width="140" height="120" viewBox="0 0 100 100" style="display: block; margin: 0 auto; margin-top: -5px;">
-                      <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="rgba(194, 215, 229, 0.4)" stroke-width="5" fill="none" stroke-linecap="round" />
-                      <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="#0c6496" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="160" stroke-dashoffset="${LP_Offset}" />
-                      <text x="25" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${LP_Min}</text>
-                      <text x="75" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${LP_Max}</text>
-                    </svg>
-                    <div style="position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: -5px;">
-                      <span style="font-size: 16px; font-weight: bold; color: #102435; font-family: sans-serif;">${fmtDec(LP_Val, LP_IsBar ? 2 : 1)}</span>
-                      <span style="font-size: 8.5px; color: #5e7185; font-weight: bold; font-family: sans-serif; margin-top: 1px;">${LP_Unit}</span>
-                    </div>
-                  </div>
-                  <div style="border-top: 1px solid #f1f5f9; padding-top: 6px; margin-top: 0px;">
-                    <div style="font-size: 9px; color: #5e7185; font-family: sans-serif;">Temp. Evaporación</div>
-                    <div style="font-size: 16px; font-weight: bold; color: #0c6496; font-family: sans-serif; margin-top: 2px;">${fmtDec(evapTemp, 1)} <span style="font-size: 11px;">°C</span></div>
-                  </div>
-                </div>
-
-                <!-- High Pressure -->
-                <div style="flex: 1; min-width: 320px; max-width: 350px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02); box-sizing: border-box;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 8px; font-weight: bold; font-size: 9.5px; color: #5e7185;">
-                    <span>testo 549i (Alta Presión)</span>
-                    <span>• 008</span>
-                  </div>
-                  <div style="position: relative; width: 140px; height: 120px; margin: 0 auto;">
-                    <svg width="140" height="120" viewBox="0 0 100 100" style="display: block; margin: 0 auto; margin-top: -5px;">
-                      <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="rgba(251, 226, 228, 0.45)" stroke-width="5" fill="none" stroke-linecap="round" />
-                      <path d="M 25 78 A 30 30 0 1 1 75 78" stroke="#e3373b" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="160" stroke-dashoffset="${HP_Offset}" />
-                      <text x="25" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${HP_Min}</text>
-                      <text x="75" y="88" font-size="7.5" fill="#516478" text-anchor="middle" font-family="sans-serif">${HP_Max}</text>
-                    </svg>
-                    <div style="position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: -5px;">
-                      <span style="font-size: 16px; font-weight: bold; color: #102435; font-family: sans-serif;">${fmtDec(HP_Val, HP_IsBar ? 2 : 1)}</span>
-                      <span style="font-size: 8.5px; color: #5e7185; font-weight: bold; font-family: sans-serif; margin-top: 1px;">${HP_Unit}</span>
-                    </div>
-                  </div>
-                  <div style="border-top: 1px solid #f1f5f9; padding-top: 6px; margin-top: 0px;">
-                    <div style="font-size: 9px; color: #5e7185; font-family: sans-serif;">Temp. Condensación</div>
-                    <div style="font-size: 16px; font-weight: bold; color: #102435; font-family: sans-serif; margin-top: 2px;">${fmtDec(condTemp, 1)} <span style="font-size: 11px;">°C</span></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    </div>
-
-    <!-- PREVENTATIVE CHECKLIST -->
-    <div style="margin-bottom: 20px;">
-      <h3 style="font-size: 12px; font-weight: bold; color: #3730a3; margin: 0 0 10px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">6. Lista de Verificación y Evidencias</h3>
-      <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: left; background: white; border: 1px solid #cbd5e1;">
-        <thead>
-          <tr style="background: #f8fafc; border-bottom: 1px solid #cbd5e1;">
-            <th style="padding: 6px 10px; font-weight: bold; color: #1e1b4b; width: 35%;">Punto de Inspección</th>
-            <th style="padding: 6px 10px; font-weight: bold; color: #1e1b4b; width: 15%; text-align: center;">Estado</th>
-            <th style="padding: 6px 10px; font-weight: bold; color: #1e1b4b; width: 50%;">Observaciones y Evidencia</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(report.checklist || []).filter(chk => chk.status !== "na").map(chk => `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 8px 10px; font-weight: bold;">
-                ${chk.label}
-                <div style="font-size: 8px; color: #94a3b8; font-weight: normal; margin-top: 2px;">${chk.category}</div>
-              </td>
-              <td style="padding: 8px 10px; text-align: center;">
-                <span style="font-size: 8.5px; font-weight: bold; color: ${chk.status === "cumple" ? "#065f46" : chk.status === "no_cumple" ? "#991b1b" : "#475569"}; background: ${chk.status === "cumple" ? "#d1fae5" : chk.status === "no_cumple" ? "#fee2e2" : "#f1f5f9"}; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
-                  ${chk.status === "cumple" ? "Cumple" : chk.status === "no_cumple" ? "Falla" : "N/A"}
-                </span>
-              </td>
-              <td style="padding: 8px 10px; color: #334155;">
-                <div style="font-style: ${chk.notes ? "normal" : "italic"}; color: ${chk.notes ? "#1e293b" : "#94a3b8"}; margin-bottom: ${chk.images?.length ? "6px" : "0"};">
-                  ${chk.notes || "Sin observaciones específicas."}
-                </div>
-                ${chk.images && chk.images.length > 0 ? `
-                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    ${chk.images.map(img => `<img src="${img}" style="width: 150px; height: 150px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;" />`).join("")}
-                  </div>
-                ` : ""}
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- COMMENTS -->
-    <div style="margin-bottom: 24px;">
-      <h3 style="font-size: 11px; font-weight: bold; color: #3730a3; margin: 0 0 6px 0; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase;">7. Comentarios y Recomendaciones del Diagnóstico</h3>
-      <div style="font-size: 10px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; background: #fafafa; white-space: pre-wrap; line-height: 1.4; color: #334155;">${report.generalComments || "No se detallaron comentarios adicionales sobre este mantenimiento estructural."}</div>
-      ${report.electricSchemeNote ? `
-        <div style="font-size: 10px; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px; background: #fdfdfd; margin-top: 8px; line-height: 1.4; color: #334155;">
-          <strong style="color: #4f46e5; display: block; margin-bottom: 3px; font-size: 9.5px;">Nota Técnico-Unifilar:</strong>
-          ${report.electricSchemeNote}
-        </div>
-      ` : ""}
-    </div>
-
-    <!-- SIGNATURES -->
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-top: 40px; page-break-inside: avoid;">
-      <div style="text-align: center; font-size: 11px;">
-        ${report.signatures?.technicianSignature ? `<img src="${report.signatures.technicianSignature}" style="max-height: 56px; max-width: 160px; display: block; margin: 0 auto 6px auto; object-fit: contain;" />` : `<div style="height: 56px; display: flex; align-items: center; justify-content: center; border-bottom: 1px dashed #cbd5e1; margin-bottom: 6px; color: #cbccd3;">Firma no capturada</div>`}
-        <div style="border-top: 1px solid #1e293b; padding-top: 4px; font-weight: bold; color: #334155;">Técnico HVAC Operador</div>
-        <div style="font-size: 9px; color: #64748b; margin-top: 2px;">${report.signatures?.technicianName || report.technicianName}</div>
-      </div>
-      <div style="text-align: center; font-size: 11px;">
-        ${report.signatures?.clientSignature ? `<img src="${report.signatures.clientSignature}" style="max-height: 56px; max-width: 160px; display: block; margin: 0 auto 6px auto; object-fit: contain;" />` : `<div style="height: 56px; display: flex; align-items: center; justify-content: center; border-bottom: 1px dashed #cbd5e1; margin-bottom: 6px; color: #cbccd3;">Firma no capturada</div>`}
-        <div style="border-top: 1px solid #1e293b; padding-top: 4px; font-weight: bold; color: #334155;">Representante Técnico del Cliente</div>
-        <div style="font-size: 9px; color: #64748b; margin-top: 2px;">${report.signatures?.clientName || report.clientName}</div>
-      </div>
-    </div>
-    </div> <!-- END PAGE 2 WRAPPER -->
-  `;
-
-  document.body.appendChild(pdfContainer);
-
-  try {
-    // Generate page image via html2canvas with scale options
-    // Scale: 2 handles high-DPI displays safely (prevents blurry layouts)
-    const canvas = await html2canvas(pdfContainer, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      allowTaint: true,
-      backgroundColor: "#ffffff"
-    });
-
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    
-    // Calculate aspect ratio / pages
-    const imgWidth = 210; // A4 size width in mm
-    const pageHeight = 297; // A4 size height in mm
-    const canvasHeightInMm = (canvas.height * imgWidth) / canvas.width;
-    
-    const doc = new jsPDF("p", "mm", "a4");
-
-    // Add first page
-    doc.addImage(imgData, "JPEG", 0, 0, imgWidth, canvasHeightInMm);
-    
-    let heightLeft = canvasHeightInMm - pageHeight;
-    let position = -pageHeight;
-
-    // Handle multi-page split
-    while (heightLeft > 0) {
-      doc.addPage();
-      doc.addImage(imgData, "JPEG", 0, position, imgWidth, canvasHeightInMm);
-      heightLeft -= pageHeight;
-      position -= pageHeight;
+function exportStyles(): string {
+  return `
+    :root {
+      --ink: #0b0b0d;
+      --muted: #5f6368;
+      --line: #dedede;
+      --soft: #f5f5f5;
+      --orange: #f97316;
+      --orange-dark: #c2410c;
+      --white: #ffffff;
     }
-
-    doc.save(`Ficha_HVAC_Folio_${report.folio}.pdf`);
-    return true;
-  } catch (err) {
-    console.error("PDF generation failed:", err);
-    return false;
-  } finally {
-    // Cleanup temporary off-screen div
-    pdfContainer.remove();
-  }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f1f1f1; color: var(--ink); }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      line-height: 1.45;
+      padding: 24px;
+    }
+    .export-document {
+      width: ${A4_WIDTH_PX}px;
+      margin: 0 auto;
+      background: var(--white);
+      color: var(--ink);
+      padding: 30px;
+    }
+    .pdf-page {
+      width: ${A4_WIDTH_PX}px;
+      min-height: ${A4_HEIGHT_PX}px;
+      margin: 0;
+      box-shadow: none;
+      overflow: hidden;
+    }
+    .export-block, .photo-card, .signature-grid, .kv-grid, .section {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .hero {
+      background: linear-gradient(135deg, #050505 0%, #171717 68%, #2a1204 100%);
+      color: var(--white);
+      border-radius: 18px;
+      padding: 24px;
+      border: 1px solid #2d2d2d;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero:after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      top: -90px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: rgba(249, 115, 22, .22);
+    }
+    .hero-top { display: flex; justify-content: space-between; gap: 24px; position: relative; z-index: 1; }
+    .brand { display: flex; gap: 14px; align-items: center; min-width: 0; }
+    .logo-box {
+      width: 58px;
+      height: 58px;
+      border-radius: 14px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      color: var(--orange);
+      font-weight: 900;
+      font-size: 22px;
+      flex: 0 0 auto;
+    }
+    .logo-box img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 5px; }
+    .company { font-size: 24px; line-height: 1.05; font-weight: 900; letter-spacing: .01em; }
+    .subtitle { color: #d7d7d7; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 4px; letter-spacing: .08em; }
+    .folio-box { text-align: right; min-width: 170px; position: relative; z-index: 1; }
+    .folio-label { font-size: 10px; color: #d7d7d7; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
+    .folio { color: var(--orange); font-size: 24px; line-height: 1.1; font-weight: 950; margin-top: 3px; }
+    .date { color: #f5f5f5; font-size: 12px; margin-top: 6px; font-weight: 700; }
+    .status-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; position: relative; z-index: 1; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(255,255,255,.08);
+      color: #fff;
+    }
+    .pill.orange { color: #fff; background: var(--orange); border-color: var(--orange); }
+    .section { margin-top: 18px; }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .10em;
+      color: #111;
+    }
+    .section-title:before {
+      content: "";
+      width: 8px;
+      height: 18px;
+      border-radius: 99px;
+      background: var(--orange);
+      display: inline-block;
+    }
+    .kv-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .kv-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .kv {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 11px;
+      min-height: 54px;
+      background: #fff;
+    }
+    .kv-label {
+      color: var(--muted);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .kv-value {
+      color: #111;
+      font-size: 12px;
+      font-weight: 800;
+      word-break: break-word;
+    }
+    .text-box {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--orange);
+      border-radius: 12px;
+      padding: 13px 14px;
+      background: #fff;
+      color: #202124;
+      font-size: 12px;
+      min-height: 64px;
+      white-space: normal;
+    }
+    .table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 10.5px;
+      background: #fff;
+    }
+    .table th {
+      background: #101010;
+      color: #fff;
+      text-align: left;
+      padding: 8px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .table td { padding: 8px; border-top: 1px solid var(--line); vertical-align: top; }
+    .circuit-card, .check-card, .photo-row, .signature-grid {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px;
+      background: #fff;
+      margin-top: 8px;
+    }
+    .circuit-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 7px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .muted { color: var(--muted); font-weight: 700; }
+    .compressor-list { margin: 8px 0 0 18px; padding: 0; font-size: 10.5px; color: #202124; }
+    .compressor-list li { margin: 3px 0; }
+    .check-head { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; font-weight: 900; }
+    .photo-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .photo-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .photo-card img {
+      width: 100%;
+      max-height: 255px;
+      object-fit: contain;
+      display: block;
+      background: #080808;
+    }
+    .photo-caption {
+      padding: 8px 10px;
+      font-size: 10.5px;
+      color: #333;
+      border-top: 1px solid var(--line);
+      font-weight: 700;
+    }
+    .signature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 30px;
+      margin-top: 22px;
+    }
+    .sig-box { text-align: center; min-height: 120px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .sig-img { max-height: 72px; max-width: 210px; object-fit: contain; margin: 0 auto 8px; display: block; }
+    .sig-placeholder { height: 72px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 10px; }
+    .sig-line { border-top: 1px solid #111; padding-top: 7px; font-size: 11px; font-weight: 900; color: #111; }
+    .sig-name { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 700; }
+    .footer {
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      color: #777;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    @media print {
+      body { padding: 0; background: #fff; }
+      .export-document { width: auto; padding: 12mm; }
+      .export-block, .photo-card, .photo-row, .signature-grid { break-inside: avoid; page-break-inside: avoid; }
+    }
+  `;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SERVICE ORDER EXPORTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** JSON backup for a service order */
-export function exportServiceOrderAsJSON(order: ServiceOrderReport) {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(order, null, 2));
-  const a = document.createElement("a");
-  a.setAttribute("href", dataStr);
-  a.setAttribute("download", `OT_${order.folio}.json`);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-/** Standalone HTML export for a service order */
-export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName: string) {
-  order = sanitizeOrderForExport(order);
-  companyName = escapeHtml(companyName);
-  const RATING_LABEL: Record<string, string> = {
-    excellent: "Excelente", normal: "Operativo",
-    requires_action: "Requiere Acción", critical: "Crítico",
-  };
-  const RATING_BG: Record<string, string> = {
-    excellent: "#d1fae5", normal: "#e0f2fe",
-    requires_action: "#fef3c7", critical: "#fee2e2",
-  };
-  const RATING_TEXT: Record<string, string> = {
-    excellent: "#065f46", normal: "#0369a1",
-    requires_action: "#92400e", critical: "#991b1b",
-  };
-  const SERVICE_LABEL: Record<string, string> = {
-    preventivo: "Mantenimiento Preventivo", correctivo: "Mantenimiento Correctivo",
-    urgencia: "Atención de Urgencia", garantia: "Garantía de Servicio",
-    puesta_marcha: "Puesta en Marcha",
-  };
-
-  const evidenceHTML = (order.evidence ?? []).length > 0
-    ? `<div class="section-title">Registro Fotográfico / Evidencias</div>
-       <div class="photo-grid">
-         ${(order.evidence ?? []).map((p, i) => `
-           <div class="photo-card">
-             <img src="${p.imageBase64}" alt="Evidencia ${i + 1}">
-             <div class="photo-caption"><strong>Foto ${i + 1}:</strong> ${p.description || "Sin descripción"}</div>
-           </div>`).join("")}
-       </div>`
-    : "";
-
-  const techSigHTML = order.signatures.technicianSignature
-    ? `<img src="${order.signatures.technicianSignature}" class="sig-img" alt="Firma técnico">`
-    : `<div style="height:60px;"></div>`;
-  const clientSigHTML = order.signatures.clientSignature
-    ? `<img src="${order.signatures.clientSignature}" class="sig-img" alt="Firma cliente">`
-    : `<div style="height:60px;"></div>`;
-
-  const html = `<!DOCTYPE html>
+function htmlShell(title: string, body: string): string {
+  return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orden de Servicio – ${order.folio}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1e293b; background: #f8fafc; padding: 24px; line-height: 1.5; }
-    .report-card { max-width: 860px; margin: 0 auto; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 36px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7c3aed; padding-bottom: 16px; margin-bottom: 24px; }
-    .header-left .company { font-size: 22px; font-weight: 800; color: #7c3aed; }
-    .header-left .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
-    .header-right { text-align: right; }
-    .header-right .folio { font-size: 18px; font-weight: 800; color: #7c3aed; }
-    .header-right .date { font-size: 11px; color: #64748b; }
-    .rating-badge { display: inline-block; padding: 6px 16px; border-radius: 999px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; background: ${RATING_BG[order.diagnosticRating] ?? "#f1f5f9"}; color: ${RATING_TEXT[order.diagnosticRating] ?? "#334155"}; }
-    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
-    .meta-item { font-size: 12px; }
-    .meta-label { font-weight: 700; color: #475569; }
-    .section-title { font-size: 13px; font-weight: 800; color: #3730a3; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 24px 0 12px; text-transform: uppercase; letter-spacing: .04em; }
-    .text-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; font-size: 13px; color: #334155; white-space: pre-wrap; line-height: 1.7; min-height: 60px; }
-    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-    .photo-card { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-    .photo-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
-    .photo-caption { padding: 8px 10px; font-size: 11px; color: #475569; }
-    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
-    .sig-box { text-align: center; }
-    .sig-img { max-height: 80px; max-width: 200px; display: block; margin: 0 auto 8px; }
-    .sig-line { border-top: 1px solid #94a3b8; padding-top: 8px; font-size: 12px; font-weight: 700; color: #475569; }
-    .sig-name { font-size: 11px; color: #64748b; margin-top: 2px; }
-    .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
-  </style>
+  <title>${escapeHtml(title)}</title>
+  <style>${exportStyles()}</style>
 </head>
-<body>
-<div class="report-card">
-
-  <div class="header">
-    <div class="header-left">
-      <div class="company">${companyName}</div>
-      <div class="subtitle">Orden de Servicio Técnico HVAC</div>
-      <div style="margin-top:10px;">${SERVICE_LABEL[order.serviceType] ?? order.serviceType} &nbsp;|&nbsp; <span class="rating-badge">${RATING_LABEL[order.diagnosticRating] ?? order.diagnosticRating}</span></div>
-    </div>
-    <div class="header-right">
-      <div class="folio">OT ${order.folio}</div>
-      <div class="date">${order.date}</div>
-      ${order.orderNumber ? `<div style="font-size:11px;color:#64748b;margin-top:4px;">Ref. Cliente: ${order.orderNumber}</div>` : ""}
-    </div>
-  </div>
-
-  <div class="meta-grid">
-    <div class="meta-item"><span class="meta-label">Cliente:</span> ${order.clientName}</div>
-    <div class="meta-item"><span class="meta-label">Sucursal:</span> ${order.branchLocation || "—"}</div>
-    <div class="meta-item"><span class="meta-label">Técnico:</span> ${order.technicianName}</div>
-    <div class="meta-item"><span class="meta-label">Contacto:</span> ${order.clientContactName || "—"}${order.clientContactRole ? ` (${order.clientContactRole})` : ""}</div>
-    ${order.clientLocationAddress ? `<div class="meta-item" style="grid-column: span 2;"><span class="meta-label">Dirección:</span> ${order.clientLocationAddress}</div>` : ""}
-  </div>
-
-  ${evidenceHTML}
-
-  <div class="section-title">Hallazgos y Diagnóstico</div>
-  <div class="text-block">${order.findings || "Sin hallazgos registrados."}</div>
-
-  <div class="section-title">Conclusiones</div>
-  <div class="text-block">${order.conclusions || "Sin conclusiones registradas."}</div>
-
-  <div class="sig-grid">
-    <div class="sig-box">
-      ${techSigHTML}
-      <div class="sig-line">Firma Técnico Responsable</div>
-      <div class="sig-name">${order.signatures.technicianName || order.technicianName}</div>
-    </div>
-    <div class="sig-box">
-      ${clientSigHTML}
-      <div class="sig-line">Firma Cliente / Recepción Conforme</div>
-      <div class="sig-name">${order.signatures.clientName || order.clientName}</div>
-    </div>
-  </div>
-
-  <div class="footer">Generado por Gestión HVAC Pro &mdash; ${new Date().toLocaleDateString("es-CL")} &mdash; Documento autónomo offline</div>
-</div>
-</body>
+<body>${body}</body>
 </html>`;
+}
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+function kv(label: string, value: unknown): string {
+  return `<div class="kv"><div class="kv-label">${escapeHtml(label)}</div><div class="kv-value">${escapeHtml(value || "N/D")}</div></div>`;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+function imageRows(images: string[], captionFactory: (index: number) => string): string {
+  if (!images.length) return "";
+  return chunk(images, 2).map(row => `
+    <div class="photo-row export-block">
+      ${row.map((src, index) => `
+        <div class="photo-card">
+          <img src="${escapeHtml(src)}" alt="${escapeHtml(captionFactory(index))}">
+          <div class="photo-caption">${escapeHtml(captionFactory(index))}</div>
+        </div>
+      `).join("")}
+    </div>
+  `).join("");
+}
+
+function buildHero(options: {
+  title: string;
+  subtitle: string;
+  folio: string;
+  date: string;
+  companyName: string;
+  companyLogo?: string;
+  pills: string[];
+}): string {
+  const logo = options.companyLogo
+    ? `<img src="${escapeHtml(options.companyLogo)}" alt="Logo">`
+    : escapeHtml(options.companyName.slice(0, 2).toUpperCase());
+
+  return `
+    <section class="hero export-block">
+      <div class="hero-top">
+        <div class="brand">
+          <div class="logo-box">${logo}</div>
+          <div>
+            <div class="company">${escapeHtml(options.companyName)}</div>
+            <div class="subtitle">${escapeHtml(options.subtitle)}</div>
+          </div>
+        </div>
+        <div class="folio-box">
+          <div class="folio-label">${escapeHtml(options.title)}</div>
+          <div class="folio">${escapeHtml(options.folio)}</div>
+          <div class="date">${escapeHtml(options.date)}</div>
+        </div>
+      </div>
+      <div class="status-row">
+        ${options.pills.map((pill, index) => `<span class="pill ${index === 0 ? "orange" : ""}">${escapeHtml(pill)}</span>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function buildReportHtml(report: HVACReport, companyName: string, companyLogo = ""): string {
+  const circuits = report.circuits || [];
+  const checklist = report.checklist || [];
+  const title = `Informe HVAC ${report.folio}`;
+
+  const circuitHtml = circuits.length ? circuits.map(circuit => {
+    const gasType = report.refrigerantType || "R410A";
+    const suctionValue = parseFloat(circuit.suctionPressure.replace(/[^\d.-]/g, "")) || 0;
+    const dischargeValue = parseFloat(circuit.dischargePressure.replace(/[^\d.-]/g, "")) || 0;
+    const suctionUnit = circuit.suctionPressure.toLowerCase().includes("bar") || suctionValue < 35 ? "bar" : "psi";
+    const dischargeUnit = circuit.dischargePressure.toLowerCase().includes("bar") || dischargeValue < 70 ? "bar" : "psi";
+    const evapTemp = calculateSatTemp(gasType, suctionValue, suctionUnit);
+    const condTemp = calculateSatTemp(gasType, dischargeValue, dischargeUnit);
+
+    return `
+      <section class="circuit-card export-block">
+        <div class="circuit-head">
+          <span>${escapeHtml(circuit.name)}</span>
+          <span class="muted">${escapeHtml(circuit.refrigerantChargeInput || report.refrigerantType)}</span>
+        </div>
+        <div class="kv-grid cols-3">
+          ${kv("Baja presion", `${suctionValue} ${suctionUnit} / ${evapTemp.toFixed(1)} C`)}
+          ${kv("Alta presion", `${dischargeValue} ${dischargeUnit} / ${condTemp.toFixed(1)} C`)}
+          ${kv("Estado circuito", circuit.status)}
+          ${kv("Sobrecalentamiento", `${circuit.superheat} K`)}
+          ${kv("Subenfriamiento", `${circuit.subcooling} K`)}
+          ${kv("Compresores", circuit.compressors?.length || 0)}
+        </div>
+        ${(circuit.compressors || []).length ? `
+          <ul class="compressor-list">
+            ${circuit.compressors.map(comp => {
+              const amperage = comp.phaseType === "trifasico"
+                ? `R ${comp.amperageR || comp.amperage}A / S ${comp.amperageS || comp.amperage}A / T ${comp.amperageT || comp.amperage}A`
+                : `${comp.amperage}A`;
+              return `<li><strong>${escapeHtml(comp.name)}</strong> - ${escapeHtml(amperage)} - ${escapeHtml(comp.voltage)}V - ${escapeHtml(comp.status)}</li>`;
+            }).join("")}
+          </ul>
+        ` : ""}
+      </section>
+    `;
+  }).join("") : `<section class="text-box export-block">No se registraron circuitos refrigerantes.</section>`;
+
+  const checklistHtml = checklist.length ? checklist.map(item => `
+    <section class="check-card export-block">
+      <div class="check-head">
+        <span>${escapeHtml(item.category)} - ${escapeHtml(item.label)}</span>
+        <span class="pill orange">${escapeHtml(item.status)}</span>
+      </div>
+      ${item.notes ? `<div class="text-box" style="margin-top:8px;">${nl2br(item.notes)}</div>` : ""}
+    </section>
+    ${imageRows(item.images || [], index => `${item.label} - foto ${index + 1}`)}
+  `).join("") : `<section class="text-box export-block">No se registraron items de checklist.</section>`;
+
+  const body = `
+    <main class="export-document">
+      ${buildHero({
+        title: "Informe tecnico HVAC",
+        subtitle: "Documento estandarizado de inspeccion y mantenimiento",
+        folio: report.folio,
+        date: formatDateCL(report.date),
+        companyName,
+        companyLogo,
+        pills: [statusLabel(report.overallStatus), criticalityLabel(report.criticality), report.equipmentType || "Equipo HVAC"],
+      })}
+
+      <section class="section export-block">
+        <h2 class="section-title">1. Identificacion del servicio</h2>
+        <div class="kv-grid">
+          ${kv("Cliente", report.clientName)}
+          ${kv("Sucursal / ubicacion", report.branchLocation)}
+          ${kv("Contacto cliente", report.clientContactName || report.clientEmail)}
+          ${kv("Tecnico responsable", report.technicianName)}
+          ${kv("Direccion", report.clientLocationAddress || "N/D")}
+          ${kv("Folio", report.folio)}
+        </div>
+      </section>
+
+      <section class="section export-block">
+        <h2 class="section-title">2. Equipo inspeccionado</h2>
+        <div class="kv-grid cols-3">
+          ${kv("Marca", report.brand)}
+          ${kv("Modelo", report.model)}
+          ${kv("Serie", report.serialNumber)}
+          ${kv("Tipo", report.equipmentType)}
+          ${kv("Refrigerante", report.refrigerantType)}
+          ${kv("Capacidad", report.capacity)}
+          ${kv("Voltaje", report.voltage)}
+          ${kv("Amperaje nominal", report.amperage)}
+          ${kv("Criticidad", criticalityLabel(report.criticality))}
+        </div>
+      </section>
+
+      <section class="section export-block">
+        <h2 class="section-title">3. Mediciones operacionales</h2>
+        <div class="kv-grid cols-3">
+          ${kv("Temperatura ambiente", report.ambientTemp)}
+          ${kv("Temperatura retorno", report.returnTemp)}
+          ${kv("Temperatura inyeccion", report.supplyTemp)}
+          ${kv("Set point", report.setPoint)}
+          ${kv("Amperaje turbina", report.fanAmperage ? `${report.fanAmperage} A` : "N/D")}
+          ${kv("Estado general", statusLabel(report.overallStatus))}
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title export-block">4. Circuitos y compresores</h2>
+        ${circuitHtml}
+      </section>
+
+      <section class="section">
+        <h2 class="section-title export-block">5. Checklist y evidencia fotografica</h2>
+        ${checklistHtml}
+      </section>
+
+      <section class="section export-block">
+        <h2 class="section-title">6. Comentarios y acciones recomendadas</h2>
+        <div class="text-box">${nl2br(report.generalComments || "Sin comentarios adicionales.")}</div>
+        ${report.electricSchemeNote ? `<div class="text-box" style="margin-top:10px;"><strong>Nota tecnico-unifilar:</strong><br>${nl2br(report.electricSchemeNote)}</div>` : ""}
+      </section>
+
+      <section class="signature-grid export-block">
+        <div class="sig-box">
+          ${report.signatures?.technicianSignature ? `<img src="${escapeHtml(report.signatures.technicianSignature)}" class="sig-img" alt="Firma tecnico">` : `<div class="sig-placeholder">Firma no capturada</div>`}
+          <div class="sig-line">Tecnico responsable</div>
+          <div class="sig-name">${escapeHtml(report.signatures?.technicianName || report.technicianName)}</div>
+        </div>
+        <div class="sig-box">
+          ${report.signatures?.clientSignature ? `<img src="${escapeHtml(report.signatures.clientSignature)}" class="sig-img" alt="Firma cliente">` : `<div class="sig-placeholder">Firma no capturada</div>`}
+          <div class="sig-line">Recepcion cliente</div>
+          <div class="sig-name">${escapeHtml(report.signatures?.clientName || report.clientName)}</div>
+        </div>
+      </section>
+
+      <footer class="footer export-block">Generado por Gestion HVAC Pro - Documento autonomo estandarizado - ${new Date().toLocaleDateString("es-CL")}</footer>
+    </main>
+  `;
+
+  return htmlShell(title, body);
+}
+
+function buildServiceOrderHtml(order: ServiceOrderReport, companyName: string, companyLogo = ""): string {
+  const evidence = order.evidence || [];
+  const evidenceHtml = evidence.length
+    ? chunk(evidence, 2).map(row => `
+        <div class="photo-row export-block">
+          ${row.map((photo, index) => `
+            <div class="photo-card">
+              <img src="${escapeHtml(photo.imageBase64)}" alt="Evidencia ${index + 1}">
+              <div class="photo-caption">${escapeHtml(photo.description || "Sin descripcion")}</div>
+            </div>
+          `).join("")}
+        </div>
+      `).join("")
+    : `<section class="text-box export-block">No se adjuntaron fotografias.</section>`;
+
+  const body = `
+    <main class="export-document">
+      ${buildHero({
+        title: "Orden de servicio",
+        subtitle: "Documento estandarizado de ejecucion y recepcion",
+        folio: order.folio,
+        date: formatDateCL(order.date),
+        companyName,
+        companyLogo,
+        pills: [statusLabel(order.diagnosticRating), serviceTypeLabel(order.serviceType), order.orderNumber ? `Ref. ${order.orderNumber}` : "Sin referencia"],
+      })}
+
+      <section class="section export-block">
+        <h2 class="section-title">1. Identificacion del servicio</h2>
+        <div class="kv-grid">
+          ${kv("Cliente", order.clientName)}
+          ${kv("Sucursal / ubicacion", order.branchLocation)}
+          ${kv("Tecnico responsable", order.technicianName)}
+          ${kv("Tipo de servicio", serviceTypeLabel(order.serviceType))}
+          ${kv("Contacto cliente", `${order.clientContactName || "N/D"}${order.clientContactRole ? ` - ${order.clientContactRole}` : ""}`)}
+          ${kv("Direccion", order.clientLocationAddress || "N/D")}
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title export-block">2. Registro fotografico / evidencias</h2>
+        ${evidenceHtml}
+      </section>
+
+      <section class="section export-block">
+        <h2 class="section-title">3. Hallazgos y diagnostico</h2>
+        <div class="text-box">${nl2br(order.findings || "Sin hallazgos registrados.")}</div>
+      </section>
+
+      <section class="section export-block">
+        <h2 class="section-title">4. Conclusiones y acciones</h2>
+        <div class="text-box">${nl2br(order.conclusions || "Sin conclusiones registradas.")}</div>
+      </section>
+
+      <section class="signature-grid export-block">
+        <div class="sig-box">
+          ${order.signatures?.technicianSignature ? `<img src="${escapeHtml(order.signatures.technicianSignature)}" class="sig-img" alt="Firma tecnico">` : `<div class="sig-placeholder">Firma no capturada</div>`}
+          <div class="sig-line">Tecnico responsable</div>
+          <div class="sig-name">${escapeHtml(order.signatures?.technicianName || order.technicianName)}</div>
+        </div>
+        <div class="sig-box">
+          ${order.signatures?.clientSignature ? `<img src="${escapeHtml(order.signatures.clientSignature)}" class="sig-img" alt="Firma cliente">` : `<div class="sig-placeholder">Firma no capturada</div>`}
+          <div class="sig-line">Recepcion cliente</div>
+          <div class="sig-name">${escapeHtml(order.signatures?.clientName || order.clientName)}</div>
+        </div>
+      </section>
+
+      <footer class="footer export-block">Generado por Gestion HVAC Pro - Documento autonomo estandarizado - ${new Date().toLocaleDateString("es-CL")}</footer>
+    </main>
+  `;
+
+  return htmlShell(`Orden de Servicio ${order.folio}`, body);
+}
+
+function downloadTextFile(content: string, mime: string, filename: string) {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `OT_${order.folio}_${order.clientName.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 }
 
-/** PDF generation for a service order (text-based A4) */
-export async function generateServiceOrderPDF(order: ServiceOrderReport, companyName: string): Promise<boolean> {
-  order = sanitizeOrderForExport(order);
-  companyName = escapeHtml(companyName);
-  const RATING_LABEL: Record<string, string> = {
-    excellent: "Excelente", normal: "Operativo",
-    requires_action: "Requiere Acción", critical: "Crítico",
-  };
-  const SERVICE_LABEL: Record<string, string> = {
-    preventivo: "Mantenimiento Preventivo", correctivo: "Mantenimiento Correctivo",
-    urgencia: "Atención de Urgencia", garantia: "Garantía de Servicio",
-    puesta_marcha: "Puesta en Marcha",
-  };
+async function waitForImages(root: HTMLElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(images.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  }));
+  if (document.fonts?.ready) await document.fonts.ready;
+}
 
-  // Build a temp off-screen HTML container identical to the HTML export
-  const container = document.createElement("div");
-  container.style.cssText = "position:fixed;left:-9999px;top:0;width:850px;background:#fff;";
-  container.innerHTML = `
-    <div style="font-family:Arial,sans-serif;color:#1e293b;padding:36px;max-width:850px;background:#fff;">
-      <div style="display:flex;justify-content:space-between;border-bottom:3px solid #7c3aed;padding-bottom:14px;margin-bottom:20px;">
-        <div>
-          <div style="font-size:20px;font-weight:800;color:#7c3aed;">${companyName}</div>
-          <div style="font-size:11px;color:#64748b;">Orden de Servicio Técnico HVAC</div>
-          <div style="margin-top:8px;font-size:12px;">${SERVICE_LABEL[order.serviceType] ?? order.serviceType} &nbsp;|&nbsp; <strong>${RATING_LABEL[order.diagnosticRating] ?? order.diagnosticRating}</strong></div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:18px;font-weight:800;color:#7c3aed;">OT ${order.folio}</div>
-          <div style="font-size:11px;color:#64748b;">${order.date}</div>
-          ${order.orderNumber ? `<div style="font-size:11px;color:#64748b;">Ref: ${order.orderNumber}</div>` : ""}
-        </div>
-      </div>
+function createPdfPage(host: HTMLElement): HTMLElement {
+  const page = document.createElement("main");
+  page.className = "export-document pdf-page";
+  host.appendChild(page);
+  return page;
+}
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:20px;font-size:12px;">
-        <div><strong>Cliente:</strong> ${order.clientName}</div>
-        <div><strong>Sucursal:</strong> ${order.branchLocation || "—"}</div>
-        <div><strong>Técnico:</strong> ${order.technicianName}</div>
-        <div><strong>Contacto:</strong> ${order.clientContactName || "—"}${order.clientContactRole ? ` (${order.clientContactRole})` : ""}</div>
-        ${order.clientLocationAddress ? `<div style="grid-column:span 2;"><strong>Dirección:</strong> ${order.clientLocationAddress}</div>` : ""}
-      </div>
+async function renderHtmlToPdf(html: string, filename: string): Promise<boolean> {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const source = parsed.body.querySelector(".export-document") as HTMLElement | null;
+  if (!source) return false;
 
-      ${(order.evidence ?? []).length > 0 ? `
-        <div style="font-size:13px;font-weight:800;color:#3730a3;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:12px;text-transform:uppercase;">Registro Fotográfico</div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-          ${(order.evidence ?? []).map((p, i) => `
-            <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;width:200px;">
-              <img src="${p.imageBase64}" style="width:200px;height:150px;object-fit:cover;display:block;" alt="Foto ${i+1}">
-              <div style="padding:6px 8px;font-size:10px;color:#475569;">${p.description || "Sin descripción"}</div>
-            </div>`).join("")}
-        </div>` : ""}
+  const host = document.createElement("div");
+  host.style.cssText = `position:fixed;left:-10000px;top:0;width:${A4_WIDTH_PX}px;background:#fff;z-index:-1;`;
 
-      <div style="font-size:13px;font-weight:800;color:#3730a3;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:10px;text-transform:uppercase;">Hallazgos y Diagnóstico</div>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:12px;color:#334155;white-space:pre-wrap;margin-bottom:20px;min-height:60px;">${order.findings || "Sin hallazgos registrados."}</div>
-
-      <div style="font-size:13px;font-weight:800;color:#3730a3;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:10px;text-transform:uppercase;">Conclusiones</div>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:12px;color:#334155;white-space:pre-wrap;margin-bottom:30px;min-height:60px;">${order.conclusions || "Sin conclusiones registradas."}</div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;">
-        <div style="text-align:center;">
-          ${order.signatures.technicianSignature ? `<img src="${order.signatures.technicianSignature}" style="max-height:70px;max-width:190px;display:block;margin:0 auto 8px;" alt="Firma técnico">` : `<div style="height:70px;"></div>`}
-          <div style="border-top:1px solid #94a3b8;padding-top:6px;font-size:11px;font-weight:700;color:#475569;">Firma Técnico Responsable</div>
-          <div style="font-size:10px;color:#64748b;">${order.signatures.technicianName || order.technicianName}</div>
-        </div>
-        <div style="text-align:center;">
-          ${order.signatures.clientSignature ? `<img src="${order.signatures.clientSignature}" style="max-height:70px;max-width:190px;display:block;margin:0 auto 8px;" alt="Firma cliente">` : `<div style="height:70px;"></div>`}
-          <div style="border-top:1px solid #94a3b8;padding-top:6px;font-size:11px;font-weight:700;color:#475569;">Firma Cliente / Recepción Conforme</div>
-          <div style="font-size:10px;color:#64748b;">${order.signatures.clientName || order.clientName}</div>
-        </div>
-      </div>
-
-      <div style="margin-top:24px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;text-align:center;">Generado por Gestión HVAC Pro · ${new Date().toLocaleDateString("es-CL")}</div>
-    </div>`;
-  document.body.appendChild(container);
+  const style = document.createElement("style");
+  style.textContent = exportStyles();
+  host.appendChild(style);
+  document.body.appendChild(host);
 
   try {
-    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const imgW = pageW;
-    const imgH = (canvas.height * imgW) / canvas.width;
-    let pos = 0;
-    let remaining = imgH;
-    doc.addImage(imgData, "JPEG", 0, pos, imgW, imgH);
-    remaining -= pageH;
-    while (remaining > 0) {
-      pos -= pageH;
-      doc.addPage();
-      doc.addImage(imgData, "JPEG", 0, pos, imgW, imgH);
-      remaining -= pageH;
+    const sourceClone = source.cloneNode(true) as HTMLElement;
+    sourceClone.style.position = "absolute";
+    sourceClone.style.visibility = "hidden";
+    host.appendChild(sourceClone);
+    await waitForImages(sourceClone);
+
+    const blocks = Array.from(sourceClone.children) as HTMLElement[];
+    sourceClone.remove();
+
+    let page = createPdfPage(host);
+    for (const block of blocks) {
+      const clone = block.cloneNode(true) as HTMLElement;
+      page.appendChild(clone);
+
+      if (page.scrollHeight > A4_HEIGHT_PX && page.children.length > 1) {
+        page.removeChild(clone);
+        page = createPdfPage(host);
+        page.appendChild(clone);
+      }
     }
-    doc.save(`OT_${order.folio}_${order.clientName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`);
+
+    const pages = Array.from(host.querySelectorAll(".pdf-page")) as HTMLElement[];
+    await waitForImages(host);
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await html2canvas(pages[i], {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+      if (i > 0) doc.addPage();
+      doc.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
+    }
+
+    doc.save(filename);
     return true;
   } catch (err) {
-    console.error("Service order PDF generation failed:", err);
+    console.error("PDF generation failed:", err);
     return false;
   } finally {
-    container.remove();
+    host.remove();
   }
+}
+
+export function exportReportAsJSON(report: HVACReport) {
+  downloadTextFile(JSON.stringify(report, null, 2), "application/json;charset=utf-8", `HVAC_Report_${fileSafe(report.folio)}.json`);
+}
+
+export function exportServiceOrderAsJSON(order: ServiceOrderReport) {
+  downloadTextFile(JSON.stringify(order, null, 2), "application/json;charset=utf-8", `OT_${fileSafe(order.folio)}.json`);
+}
+
+export function exportReportAsHTML(report: HVACReport, companyName: string) {
+  const html = buildReportHtml(report, companyName);
+  downloadTextFile(html, "text/html;charset=utf-8", `Informe_HVAC_${fileSafe(report.folio)}.html`);
+}
+
+export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName: string) {
+  const html = buildServiceOrderHtml(order, companyName);
+  downloadTextFile(html, "text/html;charset=utf-8", `OT_${fileSafe(order.folio)}.html`);
+}
+
+export function exportReportAsWord(report: HVACReport, companyName: string, companyLogo = "") {
+  const html = buildReportHtml(report, companyName, companyLogo);
+  downloadTextFile(`\ufeff${html}`, "application/msword;charset=utf-8", `Informe_HVAC_${fileSafe(report.folio)}.doc`);
+}
+
+export function exportServiceOrderAsWord(order: ServiceOrderReport, companyName: string, companyLogo = "") {
+  const html = buildServiceOrderHtml(order, companyName, companyLogo);
+  downloadTextFile(`\ufeff${html}`, "application/msword;charset=utf-8", `OT_${fileSafe(order.folio)}.doc`);
+}
+
+export async function generatePDFReport(report: HVACReport, companyName: string, companyLogo: string): Promise<boolean> {
+  return renderHtmlToPdf(
+    buildReportHtml(report, companyName, companyLogo),
+    `Informe_HVAC_${fileSafe(report.folio)}.pdf`
+  );
+}
+
+export async function generateServiceOrderPDF(order: ServiceOrderReport, companyName: string, companyLogo = ""): Promise<boolean> {
+  return renderHtmlToPdf(
+    buildServiceOrderHtml(order, companyName, companyLogo),
+    `OT_${fileSafe(order.folio)}.pdf`
+  );
 }
