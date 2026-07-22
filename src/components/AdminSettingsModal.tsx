@@ -40,18 +40,52 @@ const labelCls = "block text-[10px] font-bold text-zinc-500 uppercase tracking-w
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function syncLegacy(records: ClientRecord[]): { clients: string[]; branches: Record<string, string[]> } {
-  const clients = records.map(r => r.name);
+  const clients = records.map(r => r.name).filter(Boolean);
   const branches: Record<string, string[]> = {};
   records.forEach(r => {
     branches[r.name] = r.noSubs
       ? [r.address || r.name]
-      : r.subs.map(s => s.name || s.code).filter(Boolean);
+      : (r.subs ?? []).map(s => s.name || s.code).filter(Boolean);
   });
   return { clients, branches };
 }
 
+function normalizeSubBranch(sub: Partial<SubBranch>, fallbackId: string): SubBranch {
+  return {
+    id: String(sub.id || fallbackId),
+    type: (sub.type || "OTRO") as SubType,
+    code: String(sub.code || ""),
+    name: String(sub.name || sub.code || "Sucursal"),
+    address: String(sub.address || ""),
+    region: String(sub.region || "HEREDAR"),
+    sameContact: sub.sameContact ?? true,
+    contactPerson: sub.contactPerson ? String(sub.contactPerson) : "",
+    contactRole: sub.contactRole ? String(sub.contactRole) : "",
+    contactEmail: sub.contactEmail ? String(sub.contactEmail) : "",
+  };
+}
+
+function normalizeClientRecord(record: Partial<ClientRecord>, index: number): ClientRecord {
+  const name = String(record.name || `Cliente ${index + 1}`);
+  return {
+    id: String(record.id || `cli_${index}`),
+    name,
+    address: String(record.address || ""),
+    region: String(record.region || CHILE_REGIONS[0]),
+    contactPerson: String(record.contactPerson || ""),
+    contactRole: String(record.contactRole || ""),
+    contactEmail: String(record.contactEmail || ""),
+    noSubs: Boolean(record.noSubs),
+    subs: Array.isArray(record.subs)
+      ? record.subs.map((sub, subIndex) => normalizeSubBranch(sub, `sub_${index}_${subIndex}`))
+      : [],
+  };
+}
+
 function migrateRecords(settings: AdminSettings): ClientRecord[] {
-  if (settings.clientRecords?.length) return settings.clientRecords;
+  if (settings.clientRecords?.length) {
+    return settings.clientRecords.map(normalizeClientRecord);
+  }
   return (settings.clients ?? []).map((name, i) => ({
     id: `cli_legacy_${i}`,
     name,
@@ -93,6 +127,10 @@ function normalizeSettings(settings: AdminSettings): AdminSettings {
     ...merged,
     clientRecords: migrateRecords(merged),
   };
+}
+
+function shortRegion(region?: string): string {
+  return String(region || CHILE_REGIONS[0]).replace("RegiÃ³n ", "").replace("Región ", "");
 }
 
 // ─── SubCard ──────────────────────────────────────────────────────────────────
@@ -151,7 +189,7 @@ function SubCard({
           <label className={labelCls}>Región de la Sucursal</label>
           <select className={inputCls} value={sub.region}
             onChange={e => onUpdate(sub.id, { region: e.target.value })}>
-            <option value="HEREDAR">Heredar Región ({parentRegion.replace("Región ", "")})</option>
+            <option value="HEREDAR">Heredar Región ({shortRegion(parentRegion)})</option>
             {CHILE_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
@@ -413,9 +451,10 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
   const handleSaveClientRecord = (record: ClientRecord) => {
     const existing = localSettings.clientRecords ?? [];
     const idx = existing.findIndex(r => r.id === record.id);
+    const normalizedRecord = normalizeClientRecord(record, existing.length);
     const updated = idx > -1
-      ? existing.map((r, i) => i === idx ? record : r)
-      : [record, ...existing];
+      ? existing.map((r, i) => i === idx ? normalizedRecord : r)
+      : [normalizedRecord, ...existing];
     const { clients, branches } = syncLegacy(updated);
     setLocalSettings(prev => ({ ...prev, clientRecords: updated, clients, branches }));
     setShowClientModal(false);
@@ -612,28 +651,28 @@ export default function AdminSettingsModal({ settings, onSave, onClose }: AdminS
                     className="flex items-center justify-between px-4 py-3 bg-[#0f0f0f] border border-zinc-800 rounded-xl hover:border-zinc-700 transition group">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-blue-950/50 text-blue-400 border border-blue-900/40 flex items-center justify-center text-sm font-black shrink-0">
-                        {cr.name.charAt(0).toUpperCase()}
+                        {String(cr.name || "C").charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-zinc-200 truncate">{cr.name}</p>
+                        <p className="text-xs font-bold text-zinc-200 truncate">{cr.name || "Cliente sin nombre"}</p>
                         <p className="text-[10px] text-zinc-500 truncate">
-                          {cr.region.replace("Región ", "")}
+                          {shortRegion(cr.region)}
                           {" · "}
-                          {cr.noSubs ? "Sin sucursales" : `${cr.subs.length} sub${cr.subs.length !== 1 ? "s" : ""}`}
+                          {cr.noSubs ? "Sin sucursales" : `${(cr.subs ?? []).length} sub${(cr.subs ?? []).length !== 1 ? "s" : ""}`}
                           {cr.contactPerson && ` · ${cr.contactPerson}`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-3">
                       {/* Sub badges */}
-                      {!cr.noSubs && cr.subs.slice(0, 3).map(s => (
+                      {!cr.noSubs && (cr.subs ?? []).slice(0, 3).map(s => (
                         <span key={s.id} className="hidden sm:inline text-[9px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded">
                           {s.code || s.name.slice(0, 6) || "SUB"}
                         </span>
                       ))}
-                      {!cr.noSubs && cr.subs.length > 3 && (
+                      {!cr.noSubs && (cr.subs ?? []).length > 3 && (
                         <span className="hidden sm:inline text-[9px] font-bold bg-zinc-800 text-zinc-500 border border-zinc-700 px-1.5 py-0.5 rounded">
-                          +{cr.subs.length - 3}
+                          +{(cr.subs ?? []).length - 3}
                         </span>
                       )}
                       <button onClick={() => { setEditingClient(cr); setShowClientModal(true); }}
