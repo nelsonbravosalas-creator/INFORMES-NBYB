@@ -4,10 +4,7 @@
  * Usa @neondatabase/serverless que está optimizado para entornos
  * serverless de Vercel (conexión HTTP, no requiere pool persistente).
  */
-import { neon, neonConfig } from "@neondatabase/serverless";
-
-// Configurar fetch cache para reducir cold starts en Vercel
-neonConfig.fetchConnectionCache = true;
+import { neon } from "@neondatabase/serverless";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 

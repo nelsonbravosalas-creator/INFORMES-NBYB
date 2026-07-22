@@ -1,11 +1,60 @@
 /**
- * GET  /api/users  — listar usuarios (cualquier usuario autenticado)
- * POST /api/users  — crear usuario (solo administrador)
+ * GET    /api/users - listar usuarios
+ * POST   /api/users - crear usuario
+ * PUT    /api/users - actualizar usuario con { id, ...campos }
+ * DELETE /api/users - eliminar usuario con { id }
  */
 import bcrypt from "bcryptjs";
 import { sql, json, error, serverError } from "../_lib/db.js";
 import { authenticate } from "../_lib/auth.js";
 import { logAudit } from "../_lib/audit.js";
+
+async function updateUser(req: Request, auth: ReturnType<typeof authenticate>, id: string, body: any): Promise<Response> {
+  if (!auth) return error("No autenticado", 401);
+
+  const isSelf = auth.sub === id;
+  const isAdmin = auth.role === "administrador";
+  if (!isSelf && !isAdmin) return error("No autorizado", 403);
+  if (body.pin && !/^\d{4}$/.test(body.pin)) return error("El PIN debe ser de 4 digitos numericos", 400);
+
+  const pinHash = body.pin ? await bcrypt.hash(body.pin, 10) : null;
+  const newRole = isAdmin ? body.perfil ?? null : null;
+  const newActive = isAdmin ? body.activo ?? null : null;
+
+  const rows = await sql`
+    UPDATE users SET
+      name = COALESCE(${body.nombre ?? null}, name),
+      role = COALESCE(${newRole}, role),
+      is_active = COALESCE(${newActive}, is_active),
+      cliente_id = COALESCE(${body.clienteId ?? null}, cliente_id),
+      password_hash = COALESCE(${pinHash}, password_hash)
+    WHERE id = ${id}::uuid
+    RETURNING id, email, name AS "nombre", role AS "perfil", is_active AS "activo",
+              cliente_id AS "clienteId", created_at AS "createdAt", last_login AS "lastLogin"
+  `;
+  if (rows.length === 0) return error("Usuario no encontrado", 404);
+
+  await logAudit({
+    userId: auth.sub, userName: auth.nombre, action: "update",
+    entityType: "user", entityId: id, req,
+  });
+  return json(rows[0]);
+}
+
+async function deleteUser(req: Request, auth: ReturnType<typeof authenticate>, id: string): Promise<Response> {
+  if (!auth) return error("No autenticado", 401);
+  if (auth.role !== "administrador") return error("No autorizado", 403);
+  if (auth.sub === id) return error("No puedes eliminar tu propia cuenta", 400);
+
+  const rows = await sql`DELETE FROM users WHERE id = ${id}::uuid RETURNING id`;
+  if (rows.length === 0) return error("Usuario no encontrado", 404);
+
+  await logAudit({
+    userId: auth.sub, userName: auth.nombre, action: "delete",
+    entityType: "user", entityId: id, req,
+  });
+  return json({ success: true, deletedId: id });
+}
 
 export async function fetch(req: Request): Promise<Response> {
   const auth = authenticate(req);
@@ -28,7 +77,7 @@ export async function fetch(req: Request): Promise<Response> {
       if (!body.email || !body.nombre || !body.pin) {
         return error("Nombre, correo y PIN son requeridos", 400);
       }
-      if (!/^\d{4}$/.test(body.pin)) return error("El PIN debe ser de 4 dígitos numéricos", 400);
+      if (!/^\d{4}$/.test(body.pin)) return error("El PIN debe ser de 4 digitos numericos", 400);
 
       const pinHash = await bcrypt.hash(body.pin, 10);
       const rows = await sql`
@@ -38,7 +87,7 @@ export async function fetch(req: Request): Promise<Response> {
           ${pinHash}, ${body.activo ?? true}, ${body.clienteId ?? null}
         )
         RETURNING id, email, name AS "nombre", role AS "perfil", is_active AS "activo",
-                  cliente_id AS "clienteId", created_at AS "createdAt"
+                  cliente_id AS "clienteId", created_at AS "createdAt", last_login AS "lastLogin"
       `;
       await logAudit({
         userId: auth.sub, userName: auth.nombre, action: "create",
@@ -47,7 +96,19 @@ export async function fetch(req: Request): Promise<Response> {
       return json(rows[0], 201);
     }
 
-    return error("Método no permitido", 405);
+    if (req.method === "PUT") {
+      const body = (await req.json().catch(() => ({}))) as any;
+      if (!body.id) return error("ID requerido", 400);
+      return updateUser(req, auth, String(body.id), body);
+    }
+
+    if (req.method === "DELETE") {
+      const body = (await req.json().catch(() => ({}))) as any;
+      if (!body.id) return error("ID requerido", 400);
+      return deleteUser(req, auth, String(body.id));
+    }
+
+    return error("Metodo no permitido", 405);
   } catch (err: any) {
     if (err?.code === "23505") return error("Ya existe un usuario con ese correo", 409);
     return serverError("API /users error:", err);

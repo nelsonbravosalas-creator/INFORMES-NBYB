@@ -44,6 +44,7 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [isOpeningEditor, setIsOpeningEditor] = useState(false);
 
   // Service Orders state
   const [serviceOrders, setServiceOrders] = useState<ServiceOrderReport[]>([]);
@@ -160,16 +161,32 @@ export default function App() {
     return <LoginComponent onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const deferEditorOpen = (open: () => void) => {
+    setIsOpeningEditor(true);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        React.startTransition(() => {
+          open();
+          setIsOpeningEditor(false);
+        });
+      }, 0);
+    });
+  };
+
   // Create new report initializer
   const handleCreateNew = () => {
-    setActiveReport(null);
-    setIsFormOpen(true);
+    deferEditorOpen(() => {
+      setActiveReport(null);
+      setIsFormOpen(true);
+    });
   };
 
   // Service Order handlers
   const handleCreateServiceOrder = () => {
-    setActiveServiceOrder(null);
-    setIsServiceOrderFormOpen(true);
+    deferEditorOpen(() => {
+      setActiveServiceOrder(null);
+      setIsServiceOrderFormOpen(true);
+    });
   };
 
   const handleSaveServiceOrder = async (order: ServiceOrderReport) => {
@@ -372,16 +389,18 @@ export default function App() {
                 <button
                   id="header-create-new-btn"
                   onClick={handleCreateNew}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-blue-500/20 uppercase tracking-wider"
+                  disabled={isOpeningEditor}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-blue-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
                 >
-                  <Plus className="w-4 h-4" /> Nuevo Informe
+                  <Plus className="w-4 h-4" /> {isOpeningEditor ? "Abriendo..." : "Nuevo Informe"}
                 </button>
                 <button
                   id="header-create-ot-btn"
                   onClick={handleCreateServiceOrder}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider"
+                  disabled={isOpeningEditor}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
                 >
-                  <ClipboardList className="w-4 h-4" /> Nueva OT
+                  <ClipboardList className="w-4 h-4" /> {isOpeningEditor ? "Abriendo..." : "Nueva OT"}
                 </button>
               </>
             )}
@@ -567,7 +586,7 @@ export default function App() {
                                 </button>
                                 {/* Editar */}
                                 <button
-                                  onClick={() => { setActiveServiceOrder(ot); setIsServiceOrderFormOpen(true); }}
+                                  onClick={() => deferEditorOpen(() => { setActiveServiceOrder(ot); setIsServiceOrderFormOpen(true); })}
                                   className="p-1 text-zinc-400 hover:text-violet-400 hover:bg-zinc-800 rounded cursor-pointer"
                                   title="Editar orden de servicio"
                                 >
@@ -773,8 +792,10 @@ export default function App() {
                               <button
                                 id={`row-edit-view-${item.id}`}
                                 onClick={() => {
-                                  setActiveReport(item);
-                                  setIsFormOpen(true);
+                                  deferEditorOpen(() => {
+                                    setActiveReport(item);
+                                    setIsFormOpen(true);
+                                  });
                                 }}
                                 className="p-1 text-zinc-400 hover:text-blue-400 hover:bg-zinc-800 rounded cursor-pointer"
                                 title="Editar informe"
@@ -820,8 +841,10 @@ export default function App() {
           adminSettings={adminSettings}
           onClose={() => setViewingReport(null)}
           onEdit={(rep) => {
-            setActiveReport(rep);
-            setIsFormOpen(true);
+            deferEditorOpen(() => {
+              setActiveReport(rep);
+              setIsFormOpen(true);
+            });
           }}
         />
       )}
@@ -834,8 +857,10 @@ export default function App() {
           onClose={() => setViewingServiceOrder(null)}
           onEdit={(ot) => {
             setViewingServiceOrder(null);
-            setActiveServiceOrder(ot);
-            setIsServiceOrderFormOpen(true);
+            deferEditorOpen(() => {
+              setActiveServiceOrder(ot);
+              setIsServiceOrderFormOpen(true);
+            });
           }}
         />
       )}

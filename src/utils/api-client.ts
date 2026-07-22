@@ -130,9 +130,9 @@ export const UsersAPI = {
   create: (data: { email: string; nombre: string; perfil: string; pin: string; activo?: boolean; clienteId?: string }) =>
     request<ServerAppUser>("/api/users", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: Partial<{ nombre: string; perfil: string; pin: string; activo: boolean; clienteId: string }>) =>
-    request<ServerAppUser>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    request<ServerAppUser>("/api/users", { method: "PUT", body: JSON.stringify({ id, ...data }) }),
   delete: (id: string) =>
-    request<{ success: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
+    request<{ success: boolean }>("/api/users", { method: "DELETE", body: JSON.stringify({ id }) }),
 };
 
 // ────────────────────────────────────────────────────────────────────────────
