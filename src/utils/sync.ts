@@ -35,6 +35,7 @@ export async function pushPendingReports(): Promise<{ pushed: number; failed: nu
       await saveReport({ ...report, ...serverFields, id: report.id, serverId, _syncStatus: "synced" } as any);
       pushed++;
     } else {
+      await saveReport({ ...report, _syncStatus: "error" } as any);
       failed++;
     }
   }
@@ -58,6 +59,7 @@ export async function pushPendingServiceOrders(): Promise<{ pushed: number; fail
       await saveServiceOrder({ ...ot, ...serverFields, id: ot.id, serverId, _syncStatus: "synced" } as any);
       pushed++;
     } else {
+      await saveServiceOrder({ ...ot, _syncStatus: "error" } as any);
       failed++;
     }
   }
@@ -75,9 +77,14 @@ export async function pullReportsFromServer(): Promise<number> {
   const remote = await ReportsAPI.list();
   if (!remote) return 0;
 
+  const local = (await getReports()) as SyncableReport[];
   let merged = 0;
   for (const r of remote) {
     const localId = (r as any).legacyId ?? r.id;
+    const localCopy = local.find(item => item.id === localId);
+    if (localCopy?._syncStatus && localCopy._syncStatus !== "synced") {
+      continue;
+    }
     await saveReport({ ...r, id: localId, _syncStatus: "synced" } as any);
     merged++;
   }
@@ -90,9 +97,14 @@ export async function pullServiceOrdersFromServer(): Promise<number> {
   const remote = await ServiceOrdersAPI.list();
   if (!remote) return 0;
 
+  const local = (await getServiceOrders()) as SyncableOT[];
   let merged = 0;
   for (const r of remote) {
     const localId = (r as any).legacyId ?? r.id;
+    const localCopy = local.find(item => item.id === localId);
+    if (localCopy?._syncStatus && localCopy._syncStatus !== "synced") {
+      continue;
+    }
     await saveServiceOrder({ ...r, id: localId, _syncStatus: "synced" } as any);
     merged++;
   }

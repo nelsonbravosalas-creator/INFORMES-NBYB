@@ -113,15 +113,40 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
   const findClientRecord = (name: string, settings: AdminSettings = adminSettings) =>
     settings.clientRecords?.find(c => catalogKey(c.name) === catalogKey(name));
 
-  const findBranchRecord = (cName: string, bName: string, settings: AdminSettings = adminSettings) =>
-    findClientRecord(cName, settings)?.subs?.find(s =>
-      catalogKey(s.name) === catalogKey(bName) || catalogKey(s.code) === catalogKey(bName)
+  const branchOptionLabel = (branchRecord: SubBranch) =>
+    [branchRecord.code, branchRecord.name].filter(Boolean).join(" - ");
+
+  const branchCatalogKeys = (branchRecord: SubBranch) => [
+    branchRecord.id,
+    branchRecord.name,
+    branchRecord.code,
+    branchRecord.address,
+    branchOptionLabel(branchRecord),
+  ].filter(Boolean).map(catalogKey);
+
+  const findBranchRecord = (cName: string, bName: string, settings: AdminSettings = adminSettings) => {
+    const branchKey = catalogKey(bName || "");
+    if (!branchKey) return undefined;
+
+    return findClientRecord(cName, settings)?.subs?.find(s =>
+      branchCatalogKeys(s).includes(branchKey)
     );
+  };
+
+  const getClientBranches = (cName: string, settings: AdminSettings = adminSettings) => {
+    const clientRecord = findClientRecord(cName, settings);
+    const catalogBranches = clientRecord?.noSubs
+      ? []
+      : (clientRecord?.subs || []).map(branchOptionLabel);
+    const legacyBranches = settings.branches[cName] || [];
+
+    return Array.from(new Set([...catalogBranches, ...legacyBranches].filter(Boolean)));
+  };
 
   const branchLabel = (clientRecord: ClientRecord | undefined, branchRecord: SubBranch | undefined, fallback = "") =>
     clientRecord?.noSubs
       ? (clientRecord.address || clientRecord.name || fallback)
-      : (branchRecord?.name || branchRecord?.code || fallback);
+      : (branchRecord ? branchOptionLabel(branchRecord) : fallback);
 
   const updateTenantIds = (cName: string, bName: string) => {
     const clientRecord = findClientRecord(cName);
@@ -140,18 +165,18 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
 
     if (!clientRecord) return false;
 
-    const useClientContact = clientRecord.noSubs || branchRecord?.sameContact !== false;
+    const useClientContact = clientRecord.noSubs || !branchRecord || branchRecord.sameContact;
     const branchRegion = branchRecord?.region && branchRecord.region !== "HEREDAR"
       ? branchRecord.region
       : clientRecord.region;
 
     setClientId(clientRecord.id || "");
     setBranchId(clientRecord.noSubs ? "" : (branchRecord?.id || ""));
-    setClientContactName(useClientContact ? clientRecord.contactPerson : (branchRecord?.contactPerson || clientRecord.contactPerson));
-    setClientContactRole(useClientContact ? clientRecord.contactRole : (branchRecord?.contactRole || clientRecord.contactRole));
+    setClientContactName(useClientContact ? clientRecord.contactPerson : (branchRecord.contactPerson || clientRecord.contactPerson));
+    setClientContactRole(useClientContact ? clientRecord.contactRole : (branchRecord.contactRole || clientRecord.contactRole));
     setClientLocationAddress(clientRecord.noSubs ? clientRecord.address : (branchRecord?.address || clientRecord.address));
     setClientRegion(branchRegion || "");
-    setClientEmail(useClientContact ? clientRecord.contactEmail : (branchRecord?.contactEmail || clientRecord.contactEmail));
+    setClientEmail(useClientContact ? clientRecord.contactEmail : (branchRecord.contactEmail || clientRecord.contactEmail));
 
     return true;
   };
@@ -209,6 +234,14 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setClientLocationAddress(report.clientLocationAddress || "");
       setClientRegion(report.clientRegion || "");
 
+      const reportClientRecord = findClientRecord(report.clientName);
+      if (reportClientRecord) {
+        const reportBranchRecord = findBranchRecord(report.clientName, report.branchLocation);
+        const resolvedBranchLocation = branchLabel(reportClientRecord, reportBranchRecord, report.branchLocation);
+        setBranchLocation(resolvedBranchLocation);
+        applyClientCatalogDetails(report.clientName, resolvedBranchLocation);
+      }
+
       setEquipmentId(report.equipmentId || "");
       setCorrelative(report.correlative);
       setCorrelativeLabel(report.correlativeLabel || "");
@@ -250,7 +283,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setClientEmail("");
       
       // Auto-set first branch if matches client
-      const clientBranches = adminSettings.branches[initialClient] || [];
+      const clientBranches = getClientBranches(initialClient);
       const initialBranch = clientBranches[0] || "";
       const initialBranchRecord = findBranchRecord(initialClient, initialBranch);
       const initialBranchLocation = branchLabel(initialClientRecord, initialBranchRecord, initialBranch);
@@ -286,7 +319,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     setClientName(cName);
     const clientRecord = findClientRecord(cName);
     setClientId(clientRecord?.id || "");
-    const clientBranches = adminSettings.branches[cName] || [];
+    const clientBranches = getClientBranches(cName);
     const firstBranch = clientBranches[0] || "";
     const branchRecord = findBranchRecord(cName, firstBranch);
     const nextBranchLocation = branchLabel(clientRecord, branchRecord, firstBranch);
@@ -616,7 +649,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
                     className="w-full text-xs border border-zinc-800 rounded px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-[#0c0c0e] text-zinc-200"
                   >
                     {(() => {
-                      const branches = adminSettings.branches[clientName] || [];
+                      const branches = getClientBranches(clientName);
                       const list = [...branches];
                       if (branchLocation && !list.includes(branchLocation)) {
                         list.push(branchLocation);

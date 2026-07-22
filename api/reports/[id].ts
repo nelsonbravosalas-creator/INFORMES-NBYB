@@ -8,6 +8,7 @@ import { sql, json, error, serverError } from "../_lib/db.js";
 import { authenticate } from "../_lib/auth.js";
 import { logAudit } from "../_lib/audit.js";
 import { isTenantScoped } from "../_lib/multiTenant.js";
+import { ensureHvacReportPayloadColumn, toHvacReport } from "../_lib/reportMapper.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -16,6 +17,8 @@ export async function fetch(req: Request): Promise<Response> {
   if (!auth) return error("No autenticado", 401);
 
   try {
+    await ensureHvacReportPayloadColumn();
+
     const url = new URL(req.url);
     const id = url.pathname.split("/").pop();
     if (!id) return error("ID requerido", 400);
@@ -56,7 +59,7 @@ export async function fetch(req: Request): Promise<Response> {
           : await sql`SELECT * FROM hvac_reports WHERE legacy_id = ${id} LIMIT 1`;
 
       if (rows.length === 0) return error("Informe no encontrado", 404);
-      return json(rows[0]);
+      return json(toHvacReport(rows[0]));
     }
 
     if (req.method === "DELETE") {

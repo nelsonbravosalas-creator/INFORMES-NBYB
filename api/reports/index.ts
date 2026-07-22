@@ -6,12 +6,17 @@ import { sql, json, error, serverError } from "../_lib/db.js";
 import { authenticate } from "../_lib/auth.js";
 import { logAudit } from "../_lib/audit.js";
 import { isTenantScoped, resolveClientAndSite, upsertEquipment } from "../_lib/multiTenant.js";
+import { ensureHvacReportPayloadColumn, toHvacReport } from "../_lib/reportMapper.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function fetch(req: Request): Promise<Response> {
   const auth = authenticate(req);
   if (!auth) return error("No autenticado", 401);
 
   try {
+    await ensureHvacReportPayloadColumn();
+
     if (req.method === "GET") {
       const rows = isTenantScoped(auth)
         ? await sql`
@@ -28,6 +33,7 @@ export async function fetch(req: Request): Promise<Response> {
               r.measurements, r.circuits, r.checklist, r.signatures,
               r.electric_scheme_note AS "electricSchemeNote", r.custom_drawing_svg AS "customDrawingSvg",
               r.general_comments AS "generalComments",
+              r.report_payload AS "reportPayload",
               r.updated_at AS timestamp
             FROM hvac_reports r
             LEFT JOIN clients c ON c.id = r.client_id
@@ -52,12 +58,13 @@ export async function fetch(req: Request): Promise<Response> {
               measurements, circuits, checklist, signatures,
               electric_scheme_note AS "electricSchemeNote", custom_drawing_svg AS "customDrawingSvg",
               general_comments AS "generalComments",
+              report_payload AS "reportPayload",
               updated_at AS timestamp
             FROM hvac_reports
             ORDER BY report_date DESC, created_at DESC
             LIMIT 500
           `;
-      return json(rows);
+      return json(rows.map(toHvacReport));
     }
 
     if (req.method === "POST") {
@@ -66,11 +73,19 @@ export async function fetch(req: Request): Promise<Response> {
         return error("Folio y cliente son requeridos", 400);
       }
 
-      const legacyId = body.id ?? body.legacyId ?? null;
+      const bodyIdIsUuid = typeof body.id === "string" && UUID_RE.test(body.id);
+      const legacyId = body.legacyId ?? (bodyIdIsUuid ? null : body.id) ?? null;
       const { clientId, siteId } = await resolveClientAndSite(body);
       const equipmentId = await upsertEquipment(body, clientId, siteId);
 
-      const existing = legacyId
+      const existing = bodyIdIsUuid
+        ? await sql`
+            SELECT id, correlative
+            FROM hvac_reports
+            WHERE id = ${body.id}::uuid
+            LIMIT 1
+          `
+        : legacyId
         ? await sql`
             SELECT id, correlative
             FROM hvac_reports
@@ -93,18 +108,21 @@ export async function fetch(req: Request): Promise<Response> {
         correlative = Number(next[0].correlative);
       }
 
+      const targetId = existing[0]?.id ?? (bodyIdIsUuid ? body.id : null);
+
       const result = await sql`
         INSERT INTO hvac_reports (
-          legacy_id, folio, report_date, technician_name,
+          id, legacy_id, folio, report_date, technician_name,
           client_name, client_id, branch_name, branch_id,
           equipment_id, correlative,
           brand, model, serial_number,
           refrigerant_type, capacity, voltage, amperage,
           equipment_type, criticality, overall_status,
           measurements, circuits, checklist, signatures,
-          electric_scheme_note, custom_drawing_svg, general_comments
+          electric_scheme_note, custom_drawing_svg, general_comments,
+          report_payload
         ) VALUES (
-          ${legacyId}, ${body.folio}, ${body.date}::date, ${body.technicianName},
+          COALESCE(${targetId}::uuid, uuid_generate_v4()), ${legacyId}, ${body.folio}, ${body.date}::date, ${body.technicianName},
           ${body.clientName}, ${clientId}::uuid, ${body.branchLocation ?? null}, ${siteId}::uuid,
           ${equipmentId ? `${equipmentId}` : null}::uuid, ${correlative},
           ${body.brand ?? null}, ${body.model ?? null}, ${body.serialNumber ?? null},
@@ -114,9 +132,11 @@ export async function fetch(req: Request): Promise<Response> {
           ${JSON.stringify(body.circuits ?? [])}::jsonb,
           ${JSON.stringify(body.checklist ?? [])}::jsonb,
           ${JSON.stringify(body.signatures ?? {})}::jsonb,
-          ${body.electricSchemeNote ?? null}, ${body.customDrawingSvg ?? null}, ${body.generalComments ?? null}
+          ${body.electricSchemeNote ?? null}, ${body.customDrawingSvg ?? null}, ${body.generalComments ?? null},
+          ${JSON.stringify(body)}::jsonb
         )
-        ON CONFLICT (legacy_id) DO UPDATE SET
+        ON CONFLICT (id) DO UPDATE SET
+          legacy_id = COALESCE(hvac_reports.legacy_id, EXCLUDED.legacy_id),
           folio = EXCLUDED.folio,
           report_date = EXCLUDED.report_date,
           technician_name = EXCLUDED.technician_name,
@@ -143,6 +163,7 @@ export async function fetch(req: Request): Promise<Response> {
           electric_scheme_note = EXCLUDED.electric_scheme_note,
           custom_drawing_svg = EXCLUDED.custom_drawing_svg,
           general_comments = EXCLUDED.general_comments,
+          report_payload = EXCLUDED.report_payload,
           sync_version = hvac_reports.sync_version + 1
         RETURNING
           id, legacy_id AS "legacyId", sync_version, updated_at,

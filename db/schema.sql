@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS hvac_reports (
   electric_scheme_note TEXT,
   custom_drawing_svg TEXT,
   general_comments TEXT,
+  report_payload  JSONB NOT NULL DEFAULT '{}'::jsonb, -- copia completa del contrato del editor
 
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
