@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { ServiceOrderReport, AdminSettings, Signatures, ServiceType, DiagnosticRating, EvidencePhoto } from "../types";
 import SignaturePad from "./SignaturePad";
+import ImageEditorModal from "./ImageEditorModal";
 import {
   branchLabel,
   findBranchRecord,
@@ -10,7 +11,7 @@ import {
 } from "../utils/clientCatalog";
 import {
   ArrowLeft, Save, ClipboardList, CheckCircle, AlertTriangle,
-  AlertOctagon, CheckSquare, Camera, X, ImagePlus,
+  AlertOctagon, CheckSquare, Camera, X, ImagePlus, Edit3,
 } from "lucide-react";
 
 interface ServiceOrderFormProps {
@@ -44,6 +45,11 @@ const DIAGNOSTIC_RATINGS: {
 
 const inputCls = "w-full text-xs border border-zinc-700 rounded-lg px-3 py-2 bg-[#0f0f0f] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-violet-500 placeholder-zinc-600";
 const labelCls = "block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1";
+
+type PendingImageEdit = {
+  src: string;
+  evidenceId?: string;
+};
 
 const sectionTitle = (n: number, text: string) => (
   <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-800 pb-3">
@@ -94,6 +100,7 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
   });
 
   const [selectedClient, setSelectedClient] = useState(initialClient);
+  const [pendingImageEdits, setPendingImageEdits] = useState<PendingImageEdit[]>([]);
   const branchOptions = Array.from(new Set([
     ...getClientBranches(adminSettings, selectedClient),
     form.branchLocation,
@@ -128,27 +135,48 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
   };
 
   // Evidence photo handlers
-  const handleAddPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-
-    files.forEach(file => {
+    const imageFiles = files.filter(file => file.type.startsWith("image/"));
+    const dataUrls = await Promise.all(imageFiles.map(file => new Promise<string>(resolve => {
       const reader = new FileReader();
-      reader.onload = ev => {
-        const imageBase64 = ev.target?.result as string;
-        if (!imageBase64) return;
-        const newPhoto: EvidencePhoto = {
-          id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          imageBase64,
-          description: "",
-        };
-        setForm(f => ({ ...f, evidence: [...f.evidence, newPhoto] }));
-      };
+      reader.onload = event => resolve(event.target?.result as string);
+      reader.onerror = () => resolve("");
       reader.readAsDataURL(file);
-    });
+    })));
 
-    // Reset input so the same file can be re-selected
+    setPendingImageEdits(queue => [
+      ...queue,
+      ...dataUrls.filter(Boolean).map(src => ({ src })),
+    ]);
     e.target.value = "";
+  };
+
+  const closeActiveImageEditor = () => {
+    setPendingImageEdits(queue => queue.slice(1));
+  };
+
+  const handleImageEditorConfirm = (editedImage: string) => {
+    const activeEdit = pendingImageEdits[0];
+    if (!activeEdit) return;
+
+    if (activeEdit.evidenceId) {
+      setForm(f => ({
+        ...f,
+        evidence: f.evidence.map(photo =>
+          photo.id === activeEdit.evidenceId ? { ...photo, imageBase64: editedImage } : photo
+        ),
+      }));
+    } else {
+      const newPhoto: EvidencePhoto = {
+        id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        imageBase64: editedImage,
+        description: "",
+      };
+      setForm(f => ({ ...f, evidence: [...f.evidence, newPhoto] }));
+    }
+
+    closeActiveImageEditor();
   };
 
   const updatePhotoDescription = (id: string, description: string) =>
@@ -172,6 +200,14 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
 
   return (
     <div className="space-y-4">
+      {pendingImageEdits[0] && (
+        <ImageEditorModal
+          source={pendingImageEdits[0].src}
+          title="Editar evidencia fotografica"
+          onCancel={closeActiveImageEditor}
+          onConfirm={handleImageEditorConfirm}
+        />
+      )}
 
       {/* Form header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -335,14 +371,24 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
                     Foto {idx + 1}
                   </span>
                   {/* Delete button */}
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(photo.id)}
-                    className="absolute top-2 right-2 bg-rose-600/80 hover:bg-rose-500 text-white rounded-full p-1 transition cursor-pointer"
-                    title="Eliminar imagen"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPendingImageEdits(queue => [...queue, { src: photo.imageBase64, evidenceId: photo.id }])}
+                      className="bg-zinc-950/80 hover:bg-orange-600 text-white rounded-full p-1 transition cursor-pointer"
+                      title="Editar imagen"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(photo.id)}
+                      className="bg-rose-600/80 hover:bg-rose-500 text-white rounded-full p-1 transition cursor-pointer"
+                      title="Eliminar imagen"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {/* Description input */}
                 <div className="p-3 flex-1">

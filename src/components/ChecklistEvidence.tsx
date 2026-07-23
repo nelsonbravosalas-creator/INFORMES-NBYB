@@ -1,14 +1,22 @@
 import { InspectionChecklistItem } from "../types";
-import { Camera, Trash, CheckSquare, AlertCircle, HelpCircle, MessageSquare, Image as ImageIcon } from "lucide-react";
+import { Camera, Trash, CheckSquare, AlertCircle, HelpCircle, MessageSquare, Image as ImageIcon, Edit3 } from "lucide-react";
 import { useState } from "react";
+import ImageEditorModal from "./ImageEditorModal";
 
 interface ChecklistEvidenceProps {
   checklist: InspectionChecklistItem[];
   onChange: (updatedChecklist: InspectionChecklistItem[]) => void;
 }
 
+type PendingChecklistImageEdit = {
+  itemId: string;
+  src: string;
+  photoIdx?: number;
+};
+
 export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvidenceProps) {
   const [activeCategory, setActiveCategory] = useState<string>("Filtros y Limpieza");
+  const [pendingImageEdits, setPendingImageEdits] = useState<PendingChecklistImageEdit[]>([]);
 
   // Get unique categories for tab filter
   const categories = Array.from(new Set(checklist.map(item => item.category)));
@@ -33,30 +41,45 @@ export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvid
     onChange(updated);
   };
 
-  const handleAddPhotos = (itemId: string, files: FileList | null) => {
+  const handleAddPhotos = async (itemId: string, files: FileList | null) => {
     if (!files) return;
-
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
+    const dataUrls = await Promise.all(imageFiles.map(file => new Promise<string>(resolve => {
       const reader = new FileReader();
-      reader.onload = () => {
-        const base64Str = reader.result as string;
-        
-        // Update item with new photo
-        const updated = checklist.map(item => {
-          if (item.id === itemId) {
-            return {
-              ...item,
-              images: [...(item.images || []), base64Str]
-            };
-          }
-          return item;
-        });
-        onChange(updated);
-      };
+      reader.onload = event => resolve(event.target?.result as string);
+      reader.onerror = () => resolve("");
       reader.readAsDataURL(file);
+    })));
+
+    setPendingImageEdits(queue => [
+      ...queue,
+      ...dataUrls.filter(Boolean).map(src => ({ itemId, src })),
+    ]);
+  };
+
+  const closeActiveImageEditor = () => {
+    setPendingImageEdits(queue => queue.slice(1));
+  };
+
+  const handleImageEditorConfirm = (editedImage: string) => {
+    const activeEdit = pendingImageEdits[0];
+    if (!activeEdit) return;
+
+    const updated = checklist.map(item => {
+      if (item.id !== activeEdit.itemId) return item;
+
+      const images = [...(item.images || [])];
+      if (typeof activeEdit.photoIdx === "number") {
+        images[activeEdit.photoIdx] = editedImage;
+      } else {
+        images.push(editedImage);
+      }
+
+      return { ...item, images };
     });
+
+    onChange(updated);
+    closeActiveImageEditor();
   };
 
   const handleRemovePhoto = (itemId: string, photoIdx: number) => {
@@ -78,6 +101,15 @@ export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvid
 
   return (
     <div id="checklist-evidence-container" className="space-y-6">
+      {pendingImageEdits[0] && (
+        <ImageEditorModal
+          source={pendingImageEdits[0].src}
+          title="Editar evidencia del checklist"
+          onCancel={closeActiveImageEditor}
+          onConfirm={handleImageEditorConfirm}
+        />
+      )}
+
       {/* Category Selection Tabs */}
       <div className="flex border-b border-zinc-800 overflow-x-auto gap-1 pb-px scrollbar-thin">
         {categories.map((cat) => (
@@ -183,7 +215,10 @@ export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvid
                       accept="image/*"
                       multiple
                       className="hidden"
-                      onChange={(e) => handleAddPhotos(item.id, e.target.files)}
+                      onChange={(e) => {
+                        void handleAddPhotos(item.id, e.target.files);
+                        e.target.value = "";
+                      }}
                     />
                     <div className="flex flex-col items-center">
                       <Camera className="w-5 h-5 text-blue-500" />
@@ -200,16 +235,26 @@ export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvid
                     >
                       <img src={pic} alt="Evidencia" className="w-full h-full object-cover" />
                       
-                      {/* Delete Overlay */}
-                      <button
-                        id={`photo-del-${item.id}-${idx}`}
-                        type="button"
-                        onClick={() => handleRemovePhoto(item.id, idx)}
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-rose-400 hover:text-rose-300"
-                        title="Borrar foto de evidencia"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
+                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition">
+                        <button
+                          id={`photo-edit-${item.id}-${idx}`}
+                          type="button"
+                          onClick={() => setPendingImageEdits(queue => [...queue, { itemId: item.id, src: pic, photoIdx: idx }])}
+                          className="p-1.5 rounded-full bg-zinc-900 text-orange-400 hover:bg-orange-600 hover:text-white"
+                          title="Editar foto de evidencia"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          id={`photo-del-${item.id}-${idx}`}
+                          type="button"
+                          onClick={() => handleRemovePhoto(item.id, idx)}
+                          className="p-1.5 rounded-full bg-zinc-900 text-rose-400 hover:bg-rose-600 hover:text-white"
+                          title="Borrar foto de evidencia"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
