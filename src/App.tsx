@@ -556,13 +556,13 @@ export default function App() {
                                 <button
                                   onClick={() => generateServiceOrderPDF(ot, adminSettings.companyName, adminSettings.logo)}
                                   className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
-                                  title="Generar PDF A4"
+                                  title="Generar PDF Carta"
                                 >
                                   PDF
                                 </button>
                                 {/* HTML */}
                                 <button
-                                  onClick={() => exportServiceOrderAsHTML(ot, adminSettings.companyName)}
+                                  onClick={() => exportServiceOrderAsHTML(ot, adminSettings.companyName, adminSettings.logo)}
                                   className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
                                   title="Exportar HTML offline"
                                 >
@@ -753,7 +753,7 @@ export default function App() {
                                   await generatePDFReport(item, adminSettings.companyName, adminSettings.logo);
                                 }}
                                 className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
-                                title="Generar Informe PDF de Alta Definición A4"
+                                title="Generar Informe PDF de Alta Definición Carta"
                               >
                                 PDF
                               </button>
@@ -761,7 +761,7 @@ export default function App() {
                               {/* HTML exporter button */}
                               <button
                                 id={`exp-html-${item.id}`}
-                                onClick={() => exportReportAsHTML(item, adminSettings.companyName)}
+                                onClick={() => exportReportAsHTML(item, adminSettings.companyName, adminSettings.logo)}
                                 className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 font-bold text-[10px] cursor-pointer"
                                 title="Exportar Copia en Formato HTML Autocontenido"
                               >

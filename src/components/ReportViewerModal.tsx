@@ -813,14 +813,14 @@ export default function ReportViewerModal({ report, adminSettings, onClose, onEd
               }}
               className="flex items-center gap-1.5 px-4.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer uppercase tracking-wider"
             >
-              <Download className="w-4 h-4" /> PDF Alta Def. A4
+              <Download className="w-4 h-4" /> PDF Carta
             </button>
 
             {/* Export HTML page */}
             <button
               type="button"
               id="view-modal-html-btn"
-              onClick={() => exportReportAsHTML(report, adminSettings.companyName)}
+              onClick={() => exportReportAsHTML(report, adminSettings.companyName, adminSettings.logo)}
               className="flex items-center gap-1.5 px-4.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition cursor-pointer uppercase tracking-wider"
             >
               <Download className="w-4 h-4 text-blue-400" /> HTML Offline

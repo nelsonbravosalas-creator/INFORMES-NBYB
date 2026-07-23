@@ -3,8 +3,8 @@ import html2canvas from "html2canvas";
 import { HVACReport, ServiceOrderReport } from "../types";
 import { calculateSatTemp } from "./refrigerantPt";
 
-const A4_WIDTH_PX = 794;
-const A4_HEIGHT_PX = 1123;
+const LETTER_WIDTH_PX = 816;   // 8.5in at 96dpi
+const LETTER_HEIGHT_PX = 1056; // 11in at 96dpi
 
 function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -63,6 +63,14 @@ function serviceTypeLabel(value?: string): string {
 
 function exportStyles(): string {
   return `
+    @page {
+      size: Letter portrait;
+      margin: 0;
+    }
+    @page WordSection1 {
+      size: 8.5in 11in;
+      margin: 0;
+    }
     :root {
       --ink: #0b0b0d;
       --muted: #5f6368;
@@ -78,17 +86,20 @@ function exportStyles(): string {
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
       line-height: 1.45;
       padding: 24px;
+      mso-page-orientation: portrait;
     }
     .export-document {
-      width: ${A4_WIDTH_PX}px;
+      width: ${LETTER_WIDTH_PX}px;
+      min-height: ${LETTER_HEIGHT_PX}px;
       margin: 0 auto;
       background: var(--white);
       color: var(--ink);
       padding: 30px;
+      page: WordSection1;
     }
     .pdf-page {
-      width: ${A4_WIDTH_PX}px;
-      min-height: ${A4_HEIGHT_PX}px;
+      width: ${LETTER_WIDTH_PX}px;
+      min-height: ${LETTER_HEIGHT_PX}px;
       margin: 0;
       box-shadow: none;
       overflow: hidden;
@@ -304,7 +315,12 @@ function exportStyles(): string {
     }
     @media print {
       body { padding: 0; background: #fff; }
-      .export-document { width: auto; padding: 12mm; }
+      .export-document {
+        width: 8.5in;
+        min-height: 11in;
+        padding: 0.3125in;
+        margin: 0;
+      }
       .export-block, .photo-card, .photo-row, .signature-grid { break-inside: avoid; page-break-inside: avoid; }
     }
   `;
@@ -634,7 +650,7 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<boolean>
   if (!source) return false;
 
   const host = document.createElement("div");
-  host.style.cssText = `position:fixed;left:-10000px;top:0;width:${A4_WIDTH_PX}px;background:#fff;z-index:-1;`;
+  host.style.cssText = `position:fixed;left:-10000px;top:0;width:${LETTER_WIDTH_PX}px;background:#fff;z-index:-1;`;
 
   const style = document.createElement("style");
   style.textContent = exportStyles();
@@ -656,7 +672,7 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<boolean>
       const clone = block.cloneNode(true) as HTMLElement;
       page.appendChild(clone);
 
-      if (page.scrollHeight > A4_HEIGHT_PX && page.children.length > 1) {
+      if (page.scrollHeight > LETTER_HEIGHT_PX && page.children.length > 1) {
         page.removeChild(clone);
         page = createPdfPage(host);
         page.appendChild(clone);
@@ -666,7 +682,7 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<boolean>
     const pages = Array.from(host.querySelectorAll(".pdf-page")) as HTMLElement[];
     await waitForImages(host);
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -701,13 +717,13 @@ export function exportServiceOrderAsJSON(order: ServiceOrderReport) {
   downloadTextFile(JSON.stringify(order, null, 2), "application/json;charset=utf-8", `OT_${fileSafe(order.folio)}.json`);
 }
 
-export function exportReportAsHTML(report: HVACReport, companyName: string) {
-  const html = buildReportHtml(report, companyName);
+export function exportReportAsHTML(report: HVACReport, companyName: string, companyLogo = "") {
+  const html = buildReportHtml(report, companyName, companyLogo);
   downloadTextFile(html, "text/html;charset=utf-8", `Informe_HVAC_${fileSafe(report.folio)}.html`);
 }
 
-export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName: string) {
-  const html = buildServiceOrderHtml(order, companyName);
+export function exportServiceOrderAsHTML(order: ServiceOrderReport, companyName: string, companyLogo = "") {
+  const html = buildServiceOrderHtml(order, companyName, companyLogo);
   downloadTextFile(html, "text/html;charset=utf-8", `OT_${fileSafe(order.folio)}.html`);
 }
 

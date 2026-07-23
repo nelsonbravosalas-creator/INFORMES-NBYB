@@ -176,12 +176,12 @@ export default function ServiceOrderViewerModal({ order, adminSettings, onClose,
             <button
               onClick={() => generateServiceOrderPDF(order, adminSettings.companyName, adminSettings.logo)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-bold border border-zinc-700 cursor-pointer transition"
-              title="Exportar PDF A4">
+              title="Exportar PDF Carta">
               <FileText className="w-3.5 h-3.5 text-rose-400" /> PDF
             </button>
             {/* HTML */}
             <button
-              onClick={() => exportServiceOrderAsHTML(order, adminSettings.companyName)}
+              onClick={() => exportServiceOrderAsHTML(order, adminSettings.companyName, adminSettings.logo)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[10px] font-bold border border-zinc-700 cursor-pointer transition"
               title="Exportar HTML offline">
               <FileCode className="w-3.5 h-3.5 text-blue-400" /> HTML
