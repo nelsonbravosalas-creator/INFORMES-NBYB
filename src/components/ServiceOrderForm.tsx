@@ -2,6 +2,13 @@ import React, { useState, useRef } from "react";
 import { ServiceOrderReport, AdminSettings, Signatures, ServiceType, DiagnosticRating, EvidencePhoto } from "../types";
 import SignaturePad from "./SignaturePad";
 import {
+  branchLabel,
+  findBranchRecord,
+  findClientRecord,
+  getClientBranches,
+  getLinkedServiceOrderClientDetails,
+} from "../utils/clientCatalog";
+import {
   ArrowLeft, Save, ClipboardList, CheckCircle, AlertTriangle,
   AlertOctagon, CheckSquare, Camera, X, ImagePlus,
 } from "lucide-react";
@@ -51,17 +58,28 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
   const today = new Date().toISOString().split("T")[0];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const initialClient = order?.clientName ?? (adminSettings.clients[0] ?? "");
+  const initialClientRecord = findClientRecord(adminSettings, initialClient);
+  const initialBranches = getClientBranches(adminSettings, initialClient);
+  const initialBranchRecord = findBranchRecord(adminSettings, initialClient, order?.branchLocation ?? initialBranches[0] ?? "");
+  const initialBranchLocation = order?.branchLocation
+    ?? branchLabel(initialClientRecord, initialBranchRecord, initialBranches[0] ?? "");
+  const initialLinkedDetails = getLinkedServiceOrderClientDetails(adminSettings, initialClient, initialBranchLocation);
+
   const [form, setForm] = useState<Omit<ServiceOrderReport, "id" | "timestamp">>({
     folio:                 order?.folio                 ?? `OT-${Date.now().toString().slice(-6)}`,
     date:                  order?.date                  ?? today,
     technicianName:        order?.technicianName        ?? (adminSettings.techs[0] ?? ""),
     serviceType:           order?.serviceType           ?? "preventivo",
     orderNumber:           order?.orderNumber           ?? "",
-    clientName:            order?.clientName            ?? (adminSettings.clients[0] ?? ""),
-    branchLocation:        order?.branchLocation        ?? "",
-    clientContactName:     order?.clientContactName     ?? "",
-    clientContactRole:     order?.clientContactRole     ?? "",
-    clientLocationAddress: order?.clientLocationAddress ?? "",
+    clientId:              order?.clientId              ?? initialLinkedDetails.clientId,
+    clientName:            initialClient,
+    branchId:              order?.branchId              ?? initialLinkedDetails.branchId,
+    siteId:                order?.siteId                ?? initialLinkedDetails.siteId,
+    branchLocation:        initialBranchLocation,
+    clientContactName:     order?.clientContactName     ?? initialLinkedDetails.clientContactName,
+    clientContactRole:     order?.clientContactRole     ?? initialLinkedDetails.clientContactRole,
+    clientLocationAddress: order?.clientLocationAddress ?? initialLinkedDetails.clientLocationAddress,
     diagnosticRating:      order?.diagnosticRating      ?? "normal",
     evidence:              order?.evidence              ?? [],
     findings:              order?.findings              ?? "",
@@ -75,8 +93,11 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
     },
   });
 
-  const [selectedClient, setSelectedClient] = useState(order?.clientName ?? (adminSettings.clients[0] ?? ""));
-  const branches = adminSettings.branches[selectedClient] ?? [];
+  const [selectedClient, setSelectedClient] = useState(initialClient);
+  const branchOptions = Array.from(new Set([
+    ...getClientBranches(adminSettings, selectedClient),
+    form.branchLocation,
+  ].filter(Boolean)));
 
   const set = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) =>
     setForm(f => ({ ...f, [field]: value }));
@@ -86,7 +107,24 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
 
   const handleClientChange = (client: string) => {
     setSelectedClient(client);
-    setForm(f => ({ ...f, clientName: client, branchLocation: adminSettings.branches[client]?.[0] ?? "" }));
+    const clientRecord = findClientRecord(adminSettings, client);
+    const firstBranch = getClientBranches(adminSettings, client)[0] ?? "";
+    const branchRecord = findBranchRecord(adminSettings, client, firstBranch);
+    const nextBranchLocation = branchLabel(clientRecord, branchRecord, firstBranch);
+    setForm(f => ({
+      ...f,
+      clientName: client,
+      branchLocation: nextBranchLocation,
+      ...getLinkedServiceOrderClientDetails(adminSettings, client, nextBranchLocation),
+    }));
+  };
+
+  const handleBranchChange = (branchLocation: string) => {
+    setForm(f => ({
+      ...f,
+      branchLocation,
+      ...getLinkedServiceOrderClientDetails(adminSettings, f.clientName, branchLocation),
+    }));
   };
 
   // Evidence photo handlers
@@ -207,9 +245,9 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
           <div>
             <label className={labelCls}>Sucursal / Ubicación</label>
             <select className={inputCls} value={form.branchLocation}
-              onChange={e => set("branchLocation", e.target.value)}>
-              {branches.length > 0
-                ? branches.map(b => <option key={b} value={b}>{b}</option>)
+              onChange={e => handleBranchChange(e.target.value)}>
+              {branchOptions.length > 0
+                ? branchOptions.map(b => <option key={b} value={b}>{b}</option>)
                 : <option value="">Sin sucursales registradas</option>}
             </select>
           </div>
