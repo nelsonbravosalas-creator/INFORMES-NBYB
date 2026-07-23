@@ -1,6 +1,6 @@
 import { InspectionChecklistItem } from "../types";
 import { Camera, Trash, CheckSquare, AlertCircle, HelpCircle, MessageSquare, Image as ImageIcon, Edit3 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ImageEditorModal from "./ImageEditorModal";
 
 interface ChecklistEvidenceProps {
@@ -15,11 +15,18 @@ type PendingChecklistImageEdit = {
 };
 
 export default function ChecklistEvidence({ checklist, onChange }: ChecklistEvidenceProps) {
-  const [activeCategory, setActiveCategory] = useState<string>("Filtros y Limpieza");
+  const [activeCategory, setActiveCategory] = useState<string>(checklist[0]?.category || "");
   const [pendingImageEdits, setPendingImageEdits] = useState<PendingChecklistImageEdit[]>([]);
 
   // Get unique categories for tab filter
   const categories = Array.from(new Set(checklist.map(item => item.category)));
+
+  useEffect(() => {
+    if (!categories.length) return;
+    if (!activeCategory || !categories.includes(activeCategory)) {
+      setActiveCategory(categories[0]);
+    }
+  }, [activeCategory, categories]);
 
   const handleStatusChange = (itemId: string, status: "cumple" | "no_cumple" | "na") => {
     const updated = checklist.map(item => {

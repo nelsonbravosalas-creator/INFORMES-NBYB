@@ -110,6 +110,46 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
 
   const catalogKey = (value: string) => value.trim().toLocaleLowerCase();
 
+  const checklistKey = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLocaleLowerCase();
+
+  const legacyChecklistIds: Record<string, string> = {
+    chk_filters: "chk_filters_cleaning",
+    chk_drain_pan: "chk_drain_pan_cleaning",
+    chk_contactors: "chk_relays_contactors",
+    chk_sensors: "chk_controls_thermostats",
+    chk_refrig_fuga: "chk_refrigerant_leaks",
+    chk_fan_motors: "chk_bearing_lubrication",
+  };
+
+  const normalizeChecklist = (existing: InspectionChecklistItem[] = []) => {
+    const usedExistingIds = new Set<string>();
+
+    return DEFAULT_CHECKLIST_TEMPLATE.map(template => {
+      const match = existing.find(item => {
+        if (usedExistingIds.has(item.id)) return false;
+        return item.id === template.id
+          || legacyChecklistIds[item.id] === template.id
+          || checklistKey(item.label) === checklistKey(template.label);
+      });
+
+      if (match) {
+        usedExistingIds.add(match.id);
+      }
+
+      return {
+        ...template,
+        status: match?.status ?? template.status,
+        images: match?.images ?? template.images,
+        notes: match?.notes ?? template.notes,
+      };
+    });
+  };
+
   const findClientRecord = (name: string, settings: AdminSettings = adminSettings) =>
     settings.clientRecords?.find(c => catalogKey(c.name) === catalogKey(name));
 
@@ -260,7 +300,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setFanAmperage(report.fanAmperage);
       setSetPoint(report.setPoint || "22 °C");
       setCircuits(report.circuits || []);
-      setChecklist(report.checklist || []);
+      setChecklist(normalizeChecklist(report.checklist || []));
       setElectricSchemeNote(report.electricSchemeNote || "");
       setGeneralComments(report.generalComments || "");
       setOverallStatus(report.overallStatus || "normal");
@@ -307,7 +347,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       setSetPoint("22 °C");
 
       // Checklist template
-      setChecklist(JSON.parse(JSON.stringify(DEFAULT_CHECKLIST_TEMPLATE)));
+      setChecklist(normalizeChecklist());
 
       // Circuits template empty
       setCircuits([]);

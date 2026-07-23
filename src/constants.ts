@@ -1,99 +1,51 @@
 import { InspectionChecklistItem, AdminSettings } from "./types";
 
 export const DEFAULT_CHECKLIST_TEMPLATE: InspectionChecklistItem[] = [
-  // Categoría: Filtros y Limpieza
-  {
-    id: "chk_filters",
-    category: "Filtros y Limpieza",
-    label: "Limpieza o reemplazo de filtros de aire",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_evap_coil",
-    category: "Filtros y Limpieza",
-    label: "Lavado y desinfección de serpentín evaporador",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_cond_coil",
-    category: "Filtros y Limpieza",
-    label: "Lavado a presión de serpentín condensador",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_drain_pan",
-    category: "Filtros y Limpieza",
-    label: "Limpieza y desobstrucción de bandeja y línea de condensados",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  
-  // Categoría: Sistema Eléctrico
-  {
-    id: "chk_elec_conn",
-    category: "Sistema Eléctrico",
-    label: "Reajuste de bornes y terminales de fuerza/control",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_contactors",
-    category: "Sistema Eléctrico",
-    label: "Estado físico de platinos y contactores principales",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_sensors",
-    category: "Sistema Eléctrico",
-    label: "Calibración y lectura de sensores de temperatura",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
+  // General
+  { id: "chk_visual_general", category: "General", label: "Inspección visual general", status: "cumple", images: [], notes: "" },
+  { id: "chk_general_function", category: "General", label: "Funcionamiento general", status: "cumple", images: [], notes: "" },
 
-  // Categoría: Sistema Mecánico y Refrigeración
-  {
-    id: "chk_refrig_fuga",
-    category: "Mecánico y Refrigeración",
-    label: "Inspección de fugas de gas refrigerante",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_insulation",
-    category: "Mecánico y Refrigeración",
-    label: "Estado de aislamiento térmico en tuberías de succión",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_fan_motors",
-    category: "Mecánico y Refrigeración",
-    label: "Alineación de poleas, bandas y lubricación de motores",
-    status: "cumple",
-    images: [],
-    notes: ""
-  },
-  {
-    id: "chk_vibration",
-    category: "Mecánico y Refrigeración",
-    label: "Ausencia de ruidos extraños o vibración excesiva",
-    status: "cumple",
-    images: [],
-    notes: ""
-  }
+  // Filtros y Limpieza
+  { id: "chk_filters_cleaning", category: "Filtros y Limpieza", label: "Limpieza de filtros", status: "cumple", images: [], notes: "" },
+  { id: "chk_disposable_filters", category: "Filtros y Limpieza", label: "Instalación filtros desechables", status: "cumple", images: [], notes: "" },
+  { id: "chk_evap_coil", category: "Filtros y Limpieza", label: "Limpieza de evaporador", status: "cumple", images: [], notes: "" },
+  { id: "chk_cond_coil", category: "Filtros y Limpieza", label: "Limpieza de condensador", status: "cumple", images: [], notes: "" },
+  { id: "chk_drain_pan_cleaning", category: "Filtros y Limpieza", label: "Limpieza de bandejas", status: "cumple", images: [], notes: "" },
+
+  // Condensados y Drenaje
+  { id: "chk_condensate_pump", category: "Condensados y Drenaje", label: "Bomba de condensado", status: "cumple", images: [], notes: "" },
+  { id: "chk_drain_verification", category: "Condensados y Drenaje", label: "Verificación de desagüe", status: "cumple", images: [], notes: "" },
+
+  // Ventilación y Mecánico
+  { id: "chk_evap_fans", category: "Ventilación y Mecánico", label: "Revisión de ventiladores de evaporador", status: "cumple", images: [], notes: "" },
+  { id: "chk_cond_fans", category: "Ventilación y Mecánico", label: "Revisión de ventiladores de condensador", status: "cumple", images: [], notes: "" },
+  { id: "chk_bearing_lubrication", category: "Ventilación y Mecánico", label: "Lubricación de rodamientos", status: "cumple", images: [], notes: "" },
+  { id: "chk_compressor_condition", category: "Ventilación y Mecánico", label: "Revisión del estado de compresores", status: "cumple", images: [], notes: "" },
+
+  // Mediciones Eléctricas
+  { id: "chk_current_general", category: "Mediciones Eléctricas", label: "Medición de consumos general", status: "cumple", images: [], notes: "" },
+  { id: "chk_current_compressor", category: "Mediciones Eléctricas", label: "Medición de consumos de compresor", status: "cumple", images: [], notes: "" },
+  { id: "chk_current_heaters", category: "Mediciones Eléctricas", label: "Medición de consumos de calefactores", status: "cumple", images: [], notes: "" },
+  { id: "chk_current_evap_fan", category: "Mediciones Eléctricas", label: "Medición de consumos de ventilador evaporador", status: "cumple", images: [], notes: "" },
+  { id: "chk_current_cond_fan", category: "Mediciones Eléctricas", label: "Medición de consumos de ventilador condensador", status: "cumple", images: [], notes: "" },
+  { id: "chk_supply_voltage", category: "Mediciones Eléctricas", label: "Tensiones de alimentación", status: "cumple", images: [], notes: "" },
+  { id: "chk_relays_contactors", category: "Mediciones Eléctricas", label: "Relés y contactores", status: "cumple", images: [], notes: "" },
+
+  // Refrigeración
+  { id: "chk_pressure_switches", category: "Refrigeración", label: "Presostatos alta y baja", status: "cumple", images: [], notes: "" },
+  { id: "chk_refrigerant_pressures", category: "Refrigeración", label: "Presiones de refrigerante", status: "cumple", images: [], notes: "" },
+  { id: "chk_refrigerant_charge", category: "Refrigeración", label: "Recarga de refrigerante", status: "cumple", images: [], notes: "" },
+  { id: "chk_work_temperatures", category: "Refrigeración", label: "Temperaturas de trabajo", status: "cumple", images: [], notes: "" },
+  { id: "chk_expansion_valve", category: "Refrigeración", label: "Válvula de expansión", status: "cumple", images: [], notes: "" },
+  { id: "chk_refrigerant_level", category: "Refrigeración", label: "Nivel de refrigerante", status: "cumple", images: [], notes: "" },
+  { id: "chk_refrigerant_leaks", category: "Refrigeración", label: "Fugas de refrigerante", status: "cumple", images: [], notes: "" },
+
+  // Control y Seguridad
+  { id: "chk_controls_thermostats", category: "Control y Seguridad", label: "Controles y termostatos", status: "cumple", images: [], notes: "" },
+  { id: "chk_alarms_protections", category: "Control y Seguridad", label: "Alarmas y protecciones", status: "cumple", images: [], notes: "" },
+
+  // Pruebas
+  { id: "chk_pressure_test", category: "Pruebas", label: "Prueba de presión", status: "cumple", images: [], notes: "" },
 ];
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
