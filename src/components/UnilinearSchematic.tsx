@@ -25,7 +25,7 @@ export default function UnilinearSchematic({
   const hasCircuits = circuits.length > 0;
   
   return (
-    <div id="unilinear-schematic-card" className="bg-[#18181b] border border-zinc-800 text-zinc-100 p-6 rounded-xl space-y-4 shadow-xl">
+    <div id="unilinear-schematic-card" className="bg-[#18181b] border border-zinc-800 text-zinc-100 p-4 sm:p-6 rounded-xl space-y-4 shadow-xl min-w-0">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
         <div>
           <h4 className="text-sm font-semibold flex items-center gap-2 text-blue-400">
@@ -45,7 +45,7 @@ export default function UnilinearSchematic({
         <svg
           id="hvac-pro-unilinear-svg"
           viewBox="0 0 800 380"
-          className="w-full min-w-[650px] h-auto text-slate-300 stroke-slate-500 fill-none"
+          className="w-full min-w-[520px] sm:min-w-[650px] h-auto text-slate-300 stroke-slate-500 fill-none"
         >
           {/* Defs for arrows / markers */}
           <defs>

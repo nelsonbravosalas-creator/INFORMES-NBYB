@@ -299,25 +299,25 @@ export default function App() {
     <div className="min-h-screen bg-[#0d0d0d] font-sans antialiased text-zinc-300">
       
       {/* Dynamic Header */}
-      <header className="sticky top-0 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-zinc-850 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="sticky top-0 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-zinc-850 z-40 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-3 sm:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
           {/* Logo Name */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold shadow-lg shadow-blue-500/20">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold shadow-lg shadow-blue-500/20 shrink-0">
               <span className="text-base font-mono">H</span>
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-[15px] tracking-wide text-zinc-100 uppercase">Gestión HVAC Pro</span>
-                <span className="text-[9px] font-mono tracking-wider font-extrabold uppercase bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full">v1.6 iOS Offline</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-extrabold text-[15px] tracking-wide text-zinc-100 uppercase truncate">Gestión HVAC Pro</span>
+                <span className="hidden md:inline-flex text-[9px] font-mono tracking-wider font-extrabold uppercase bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full shrink-0">v1.6 iOS Offline</span>
               </div>
-              <p className="text-[10px] text-zinc-500 -mt-0.5">Elaboración de Informes y Diagnóstico HVAC</p>
+              <p className="hidden sm:block text-[10px] text-zinc-500 -mt-0.5 truncate">Elaboración de Informes y Diagnóstico HVAC</p>
             </div>
           </div>
 
           {/* Quick Menu Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">
             {/* Botón instalar PWA (sólo aparece cuando el navegador lo permite) */}
             <PWAHeaderInstallButton />
 
@@ -390,7 +390,7 @@ export default function App() {
                   id="header-create-new-btn"
                   onClick={handleCreateNew}
                   disabled={isOpeningEditor}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-blue-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
+                  className="flex flex-1 sm:flex-none min-w-[8.5rem] sm:min-w-0 items-center justify-center gap-1.5 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-blue-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
                 >
                   <Plus className="w-4 h-4" /> {isOpeningEditor ? "Abriendo..." : "Nuevo Informe"}
                 </button>
@@ -398,7 +398,7 @@ export default function App() {
                   id="header-create-ot-btn"
                   onClick={handleCreateServiceOrder}
                   disabled={isOpeningEditor}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
+                  className="flex flex-1 sm:flex-none min-w-[8.5rem] sm:min-w-0 items-center justify-center gap-1.5 px-3 sm:px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider disabled:shadow-none disabled:cursor-wait"
                 >
                   <ClipboardList className="w-4 h-4" /> {isOpeningEditor ? "Abriendo..." : "Nueva OT"}
                 </button>
@@ -409,7 +409,7 @@ export default function App() {
       </header>
 
       {/* Primary body container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-x-hidden">
         
         {isFormOpen ? (
           /* Report Creator / Editor View */
@@ -476,7 +476,7 @@ export default function App() {
 
             {/* Service Orders panel */}
             <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
                   <ClipboardList className="w-4 h-4 text-violet-400" />
                   Órdenes de Servicio
@@ -484,13 +484,13 @@ export default function App() {
                 </h3>
                 <button
                   onClick={handleCreateServiceOrder}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
+                  className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold active:scale-95 transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" /> Nueva OT
                 </button>
               </div>
               <div className="overflow-x-auto border border-zinc-800 rounded-xl">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full min-w-[760px] text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#121212] border-b border-zinc-800 text-zinc-500 font-extrabold uppercase tracking-wide">
                       <th className="px-4 py-3">Folio / Fecha</th>
@@ -628,12 +628,12 @@ export default function App() {
                 </div>
 
                 {/* Filter segments */}
-                <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2.5 w-full md:w-auto">
                   <select
                     id="status-filter-select"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="text-xs bg-[#0f0f0f] border border-zinc-850 focus:border-blue-500 rounded-xl px-3 py-2 text-zinc-300"
+                    className="w-full lg:w-auto text-xs bg-[#0f0f0f] border border-zinc-850 focus:border-blue-500 rounded-xl px-3 py-2 text-zinc-300"
                   >
                     <option value="all">Filtro Estado: Todos</option>
                     <option value="excellent">Excelente</option>
@@ -646,7 +646,7 @@ export default function App() {
                     id="client-filter-select"
                     value={clientFilter}
                     onChange={(e) => setClientFilter(e.target.value)}
-                    className="text-xs bg-[#0f0f0f] border border-zinc-850 focus:border-blue-500 rounded-xl px-3 py-2 text-zinc-300"
+                    className="w-full lg:w-auto text-xs bg-[#0f0f0f] border border-zinc-850 focus:border-blue-500 rounded-xl px-3 py-2 text-zinc-300"
                   >
                     <option value="all">Filtro Cliente: Todos</option>
                     {adminSettings.clients.map(cli => (
@@ -658,14 +658,14 @@ export default function App() {
                     id="export-excel-btn"
                     onClick={handleExportDataList}
                     disabled={totalReports === 0}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition shadow-md uppercase tracking-wider cursor-pointer"
+                    className="flex w-full lg:w-auto items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition shadow-md uppercase tracking-wider cursor-pointer"
                     title="Exportar informes registrados a Excel"
                   >
                     <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
                   </button>
 
                   {/* JSON Backup import */}
-                  <label className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold cursor-pointer transition shadow-md uppercase tracking-wider">
+                  <label className="flex w-full lg:w-auto items-center justify-center gap-1.5 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold cursor-pointer transition shadow-md uppercase tracking-wider">
                     <Upload className="w-4 h-4 text-blue-400" /> Importar (.json)
                     <input
                       id="json-backup-importer"
@@ -680,7 +680,7 @@ export default function App() {
 
               {/* Data list grid table */}
               <div className="overflow-x-auto border border-zinc-800 rounded-xl">
-                <table id="reports-master-table" className="w-full text-left border-collapse text-xs">
+                <table id="reports-master-table" className="w-full min-w-[840px] text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#121212] border-b border-zinc-800 text-zinc-500 font-extrabold uppercase tracking-wide">
                       <th className="px-4 py-3">Folio / Fecha</th>

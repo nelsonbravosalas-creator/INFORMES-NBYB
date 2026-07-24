@@ -112,8 +112,8 @@ export default function CircuitArchitecture({ circuits, onChange, refrigerantTyp
 
   return (
     <div id="circuit-architecture-root" className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Zap className="w-5 h-5 text-amber-500 animate-pulse" /> Arquitectura de Circuitos Refrigerantes
           </h3>
@@ -125,7 +125,7 @@ export default function CircuitArchitecture({ circuits, onChange, refrigerantTyp
           id="add-circuit-btn"
           type="button"
           onClick={addCircuit}
-          className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold shadow-sm transition"
         >
           <Plus className="w-4 h-4" /> Agregar Circuito
         </button>
@@ -152,14 +152,14 @@ export default function CircuitArchitecture({ circuits, onChange, refrigerantTyp
               className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col w-full max-w-full"
             >
               {/* Header */}
-              <div className="bg-slate-50/80 dark:bg-slate-900/40 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="bg-slate-50/80 dark:bg-slate-900/40 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-start sm:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                   <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{circuit.name}</span>
                   <select
                     id={`circuit-status-${circuit.id}`}
                     value={circuit.status}
                     onChange={(e) => updateCircuit(circuit.id, { status: e.target.value as any })}
-                    className={`text-xs font-bold rounded px-2 py-0.5 border ${
+                    className={`w-full sm:w-auto text-xs font-bold rounded px-2 py-1 sm:py-0.5 border ${
                       circuit.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" :
                       circuit.status === "warning" ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" :
                       circuit.status === "error" ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" :
@@ -313,13 +313,13 @@ export default function CircuitArchitecture({ circuits, onChange, refrigerantTyp
                               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{comp.name}</span>
                             </div>
 
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {/* Phase Select */}
                               <select
                                 id={`comp-phase-${comp.id}`}
                                 value={comp.phaseType || "monofasico"}
                                 onChange={(e) => updateCompressor(circuit.id, comp.id, { phaseType: e.target.value as any })}
-                                className="text-[10px] font-bold bg-white dark:bg-slate-950 border border-slate-200 dark:border-zinc-800 rounded px-1 py-0.5 cursor-pointer text-slate-700 dark:text-slate-350"
+                                className="max-w-full text-[10px] font-bold bg-white dark:bg-slate-950 border border-slate-200 dark:border-zinc-800 rounded px-1 py-1 sm:py-0.5 cursor-pointer text-slate-700 dark:text-slate-350"
                               >
                                 <option value="monofasico">Monofásico (1Ф)</option>
                                 <option value="trifasico">Trifásico (3Ф)</option>
@@ -330,7 +330,7 @@ export default function CircuitArchitecture({ circuits, onChange, refrigerantTyp
                                 id={`comp-status-${comp.id}`}
                                 value={comp.status}
                                 onChange={(e) => updateCompressor(circuit.id, comp.id, { status: e.target.value as any })}
-                                className="text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1 py-0.5 cursor-pointer text-slate-700 dark:text-slate-350"
+                                className="max-w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1 py-1 sm:py-0.5 cursor-pointer text-slate-700 dark:text-slate-350"
                               >
                                 <option value="active">En Marcha</option>
                                 <option value="inactive">Detenido</option>

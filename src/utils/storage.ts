@@ -11,6 +11,77 @@ localforage.config({
 
 const REPORT_LIST_KEY = "hvac_reports";
 const ADMIN_SETTING_KEY = "hvac_admin_settings";
+const FORM_DRAFT_PREFIX = "hvac_form_draft:";
+
+export type FormDraftKind = "report" | "serviceOrder";
+
+export interface FormDraft<T> {
+  key: string;
+  kind: FormDraftKind;
+  sourceId?: string;
+  updatedAt: string;
+  data: T;
+}
+
+export async function getFormDraft<T>(key: string): Promise<FormDraft<T> | null> {
+  const storageKey = `${FORM_DRAFT_PREFIX}${key}`;
+  try {
+    const draft = await localforage.getItem<FormDraft<T>>(storageKey);
+    if (draft) return draft;
+  } catch (err) {
+    console.warn("localForage getFormDraft failed, falling back to localStorage", err);
+  }
+
+  try {
+    const backup = localStorage.getItem(storageKey);
+    return backup ? JSON.parse(backup) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export async function saveFormDraft<T>(
+  key: string,
+  kind: FormDraftKind,
+  data: T,
+  sourceId?: string
+): Promise<FormDraft<T>> {
+  const storageKey = `${FORM_DRAFT_PREFIX}${key}`;
+  const draft: FormDraft<T> = {
+    key,
+    kind,
+    sourceId,
+    updatedAt: new Date().toISOString(),
+    data,
+  };
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(draft));
+  } catch (err) {
+    console.warn("localStorage form draft backup failed", err);
+  }
+
+  try {
+    await localforage.setItem(storageKey, draft);
+  } catch (err) {
+    console.warn("localForage saveFormDraft failed; localStorage backup remains available", err);
+  }
+
+  return draft;
+}
+
+export async function deleteFormDraft(key: string): Promise<void> {
+  const storageKey = `${FORM_DRAFT_PREFIX}${key}`;
+  try {
+    localStorage.removeItem(storageKey);
+  } catch (_) {}
+
+  try {
+    await localforage.removeItem(storageKey);
+  } catch (err) {
+    console.warn("localForage deleteFormDraft failed", err);
+  }
+}
 
 /**
  * Safe storage wrapper following specifications

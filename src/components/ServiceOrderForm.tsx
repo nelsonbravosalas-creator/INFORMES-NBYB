@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ServiceOrderReport, AdminSettings, Signatures, ServiceType, DiagnosticRating, EvidencePhoto } from "../types";
 import SignaturePad from "./SignaturePad";
 import ImageEditorModal from "./ImageEditorModal";
+import { deleteFormDraft, getFormDraft, saveFormDraft } from "../utils/storage";
 import {
   branchLabel,
   findBranchRecord,
@@ -17,7 +18,7 @@ import {
 interface ServiceOrderFormProps {
   order?: ServiceOrderReport | null;
   adminSettings: AdminSettings;
-  onSave: (order: ServiceOrderReport) => void;
+  onSave: (order: ServiceOrderReport) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -51,6 +52,8 @@ type PendingImageEdit = {
   evidenceId?: string;
 };
 
+type ServiceOrderDraftData = Omit<ServiceOrderReport, "id" | "timestamp">;
+
 const sectionTitle = (n: number, text: string) => (
   <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-2 border-b border-zinc-800 pb-3">
     <span className="w-5 h-5 rounded-full bg-violet-600/20 text-violet-400 flex items-center justify-center text-[10px] font-black shrink-0">
@@ -63,6 +66,9 @@ const sectionTitle = (n: number, text: string) => (
 export default function ServiceOrderForm({ order, adminSettings, onSave, onClose }: ServiceOrderFormProps) {
   const today = new Date().toISOString().split("T")[0];
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftKey = `service-order:${order?.id ?? "new"}`;
+  const skipNextAutosaveRef = useRef(true);
+  const hasUserDraftChangeRef = useRef(false);
 
   const initialClient = order?.clientName ?? (adminSettings.clients[0] ?? "");
   const initialClientRecord = findClientRecord(adminSettings, initialClient);
@@ -101,10 +107,83 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
 
   const [selectedClient, setSelectedClient] = useState(initialClient);
   const [pendingImageEdits, setPendingImageEdits] = useState<PendingImageEdit[]>([]);
+  const [canAutosaveDraft, setCanAutosaveDraft] = useState(false);
+  const [draftNotice, setDraftNotice] = useState("");
   const branchOptions = Array.from(new Set([
     ...getClientBranches(adminSettings, selectedClient),
     form.branchLocation,
   ].filter(Boolean)));
+
+  const saveDraftSnapshot = () =>
+    saveFormDraft<ServiceOrderDraftData>(draftKey, "serviceOrder", form, order?.id);
+
+  useEffect(() => {
+    let cancelled = false;
+    skipNextAutosaveRef.current = true;
+    hasUserDraftChangeRef.current = false;
+    setCanAutosaveDraft(false);
+    setDraftNotice("");
+
+    async function restoreDraft() {
+      const draft = await getFormDraft<ServiceOrderDraftData>(draftKey);
+      if (cancelled) return;
+
+      if (draft) {
+        const updated = new Date(draft.updatedAt).toLocaleString();
+        const shouldRecover = window.confirm(
+          `Existe un borrador de esta OT guardado el ${updated}.\n\n¿Deseas recuperarlo?`
+        );
+
+        if (shouldRecover) {
+          setForm(draft.data);
+          setSelectedClient(draft.data.clientName);
+          setDraftNotice("Borrador recuperado y autoguardado activo.");
+        } else {
+          await deleteFormDraft(draftKey);
+          if (!cancelled) setDraftNotice("Borrador anterior descartado.");
+        }
+      }
+
+      if (!cancelled) setCanAutosaveDraft(true);
+    }
+
+    void restoreDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!canAutosaveDraft) return;
+
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+
+    hasUserDraftChangeRef.current = true;
+    const timeout = window.setTimeout(() => {
+      void saveDraftSnapshot().then(() => setDraftNotice("Borrador autoguardado."));
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [canAutosaveDraft, form, draftKey]);
+
+  useEffect(() => {
+    if (!canAutosaveDraft) return;
+
+    const saveBeforeLeaving = () => {
+      if (hasUserDraftChangeRef.current) void saveDraftSnapshot();
+    };
+
+    window.addEventListener("pagehide", saveBeforeLeaving);
+    window.addEventListener("beforeunload", saveBeforeLeaving);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforeLeaving);
+      window.removeEventListener("beforeunload", saveBeforeLeaving);
+    };
+  }, [canAutosaveDraft, form, draftKey]);
 
   const set = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) =>
     setForm(f => ({ ...f, [field]: value }));
@@ -188,10 +267,16 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
   const removePhoto = (id: string) =>
     setForm(f => ({ ...f, evidence: f.evidence.filter(p => p.id !== id) }));
 
-  const handleSave = () => {
+  const handleClose = () => {
+    if (canAutosaveDraft && hasUserDraftChangeRef.current) void saveDraftSnapshot();
+    onClose();
+  };
+
+  const handleSave = async () => {
     if (!form.folio.trim()) { alert("El folio es requerido."); return; }
     if (!form.clientName.trim()) { alert("Debe seleccionar un cliente."); return; }
-    onSave({
+    await deleteFormDraft(draftKey);
+    await onSave({
       id:        order?.id ?? `ot_${Date.now()}`,
       timestamp: new Date().toISOString(),
       ...form,
@@ -199,7 +284,7 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {pendingImageEdits[0] && (
         <ImageEditorModal
           source={pendingImageEdits[0].src}
@@ -210,9 +295,9 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
       )}
 
       {/* Form header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <button onClick={onClose}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={handleClose}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition cursor-pointer">
             <ArrowLeft className="w-4 h-4" /> Volver
           </button>
@@ -222,10 +307,11 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
               {order ? "Editar Orden de Servicio" : "Nueva Orden de Servicio"}
             </h2>
             <p className="text-[10px] text-zinc-500 mt-0.5">Complete las 7 secciones del informe de OT</p>
+            {draftNotice && <p className="text-[10px] text-violet-400 mt-1">{draftNotice}</p>}
           </div>
         </div>
         <button onClick={handleSave}
-          className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider cursor-pointer">
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold active:scale-95 transition shadow-sm shadow-violet-500/20 uppercase tracking-wider cursor-pointer">
           <Save className="w-4 h-4" /> Guardar OT
         </button>
       </div>
@@ -311,7 +397,7 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
       {/* 3. Calificación del Diagnóstico */}
       <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         {sectionTitle(3, "Calificación del Diagnóstico")}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {DIAGNOSTIC_RATINGS.map(r => {
             const selected = form.diagnosticRating === r.value;
             return (
@@ -486,7 +572,7 @@ export default function ServiceOrderForm({ order, adminSettings, onSave, onClose
       {/* Bottom save */}
       <div className="flex justify-end pb-6">
         <button onClick={handleSave}
-          className="flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-bold active:scale-95 transition shadow-lg shadow-violet-500/20 uppercase tracking-wider cursor-pointer">
+          className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-bold active:scale-95 transition shadow-lg shadow-violet-500/20 uppercase tracking-wider cursor-pointer">
           <Save className="w-4 h-4" /> Guardar Orden de Servicio
         </button>
       </div>

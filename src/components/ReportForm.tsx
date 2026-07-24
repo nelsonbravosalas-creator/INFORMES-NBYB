@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { HVACReport, AdminSettings, Circuit, InspectionChecklistItem, ClientRecord, SubBranch } from "../types";
 import { DEFAULT_CHECKLIST_TEMPLATE } from "../constants";
+import { deleteFormDraft, getFormDraft, saveFormDraft } from "../utils/storage";
 import NameplateOCR from "./NameplateOCR";
 import CircuitArchitecture from "./CircuitArchitecture";
 import UnilinearSchematic from "./UnilinearSchematic";
@@ -15,12 +16,19 @@ import {
 interface ReportFormProps {
   report: HVACReport | null; // Null means create new
   adminSettings: AdminSettings;
-  onSave: (report: HVACReport) => void;
+  onSave: (report: HVACReport) => void | Promise<void>;
   onClose: () => void;
   onUpdateAdminSettings?: (settings: AdminSettings) => void;
 }
 
+type ReportDraftData = Omit<HVACReport, "id" | "timestamp">;
+
 export default function ReportForm({ report, adminSettings, onSave, onClose, onUpdateAdminSettings }: ReportFormProps) {
+  const draftKey = `report:${report?.id ?? "new"}`;
+  const skipNextAutosaveRef = useRef(true);
+  const hasUserDraftChangeRef = useRef(false);
+  const lastInitializedDraftKeyRef = useRef("");
+
   // Setup local states starting from report or dynamic defaults
   const [folio, setFolio] = useState("");
   const [date, setDate] = useState("");
@@ -81,6 +89,8 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
 
   const [isAddingTech, setIsAddingTech] = useState(false);
   const [newTechName, setNewTechName] = useState("");
+  const [canAutosaveDraft, setCanAutosaveDraft] = useState(false);
+  const [draftNotice, setDraftNotice] = useState("");
 
   const handleAddTechnician = () => {
     const trimmed = newTechName.trim();
@@ -258,8 +268,105 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     }
   };
 
+  const buildReportDraftData = (): ReportDraftData => ({
+    folio,
+    date,
+    technicianName,
+    clientId,
+    clientName,
+    clientEmail,
+    branchId,
+    siteId: branchId,
+    branchLocation,
+    clientContactName,
+    clientContactRole,
+    clientLocationAddress,
+    clientRegion,
+    equipmentId,
+    correlative,
+    correlativeLabel,
+    brand,
+    model,
+    serialNumber,
+    refrigerantType,
+    capacity,
+    voltage,
+    amperage,
+    equipmentType,
+    criticality,
+    ambientTemp,
+    returnTemp,
+    supplyTemp,
+    fanAmperage,
+    setPoint,
+    circuits,
+    checklist,
+    electricSchemeNote,
+    generalComments,
+    overallStatus,
+    signatures: {
+      technicianName: techNameSign || technicianName,
+      technicianSignature: techSign,
+      clientName: clientNameSign || clientName,
+      clientSignature: clientSign,
+      signDate: date,
+    },
+  });
+
+  const applyReportDraftData = (draft: ReportDraftData) => {
+    setFolio(draft.folio || "");
+    setDate(draft.date || new Date().toISOString().split("T")[0]);
+    setTechnicianName(draft.technicianName || "");
+    setClientId(draft.clientId || "");
+    setClientName(draft.clientName || "");
+    setClientEmail(draft.clientEmail || "");
+    setBranchId(draft.branchId || draft.siteId || "");
+    setBranchLocation(draft.branchLocation || "");
+    setClientContactName(draft.clientContactName || "");
+    setClientContactRole(draft.clientContactRole || "");
+    setClientLocationAddress(draft.clientLocationAddress || "");
+    setClientRegion(draft.clientRegion || "");
+    setEquipmentId(draft.equipmentId || "");
+    setCorrelative(draft.correlative);
+    setCorrelativeLabel(draft.correlativeLabel || "");
+    setEquipmentType(draft.equipmentType || "");
+    setCriticality(draft.criticality || "no_critico");
+    setBrand(draft.brand || "");
+    setModel(draft.model || "");
+    setSerialNumber(draft.serialNumber || "");
+    setRefrigerantType(draft.refrigerantType || "");
+    setCapacity(draft.capacity || "");
+    setVoltage(draft.voltage || "");
+    setAmperage(draft.amperage || "");
+    setAmbientTemp(draft.ambientTemp || "28 Â°C");
+    setReturnTemp(draft.returnTemp || "24 Â°C");
+    setSupplyTemp(draft.supplyTemp || "14 Â°C");
+    setFanAmperage(draft.fanAmperage || "2.8");
+    setSetPoint(draft.setPoint || "22 Â°C");
+    setCircuits(draft.circuits || []);
+    setChecklist(normalizeChecklist(draft.checklist || []));
+    setElectricSchemeNote(draft.electricSchemeNote || "");
+    setGeneralComments(draft.generalComments || "");
+    setOverallStatus(draft.overallStatus || "normal");
+    setTechSign(draft.signatures?.technicianSignature || "");
+    setClientSign(draft.signatures?.clientSignature || "");
+    setTechNameSign(draft.signatures?.technicianName || draft.technicianName || "");
+    setClientNameSign(draft.signatures?.clientName || draft.clientName || "");
+  };
+
+  const saveDraftSnapshot = () =>
+    saveFormDraft<ReportDraftData>(draftKey, "report", buildReportDraftData(), report?.id);
+
   // Load report data or default structures on mounting
   useEffect(() => {
+    if (lastInitializedDraftKeyRef.current === draftKey) return;
+
+    lastInitializedDraftKeyRef.current = draftKey;
+    setCanAutosaveDraft(false);
+    setDraftNotice("");
+    skipNextAutosaveRef.current = true;
+    hasUserDraftChangeRef.current = false;
+
     if (report) {
       setFolio(report.folio);
       setDate(report.date);
@@ -352,7 +459,152 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       // Circuits template empty
       setCircuits([]);
     }
-  }, [report, adminSettings]);
+  }, [report, adminSettings, draftKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreDraft() {
+      const draft = await getFormDraft<ReportDraftData>(draftKey);
+      if (cancelled) return;
+
+      if (draft) {
+        const updated = new Date(draft.updatedAt).toLocaleString();
+        const shouldRecover = window.confirm(
+          `Existe un borrador de este informe/checklist guardado el ${updated}.\n\n¿Deseas recuperarlo?`
+        );
+
+        if (shouldRecover) {
+          applyReportDraftData(draft.data);
+          setDraftNotice("Borrador recuperado y autoguardado activo.");
+        } else {
+          await deleteFormDraft(draftKey);
+          if (!cancelled) setDraftNotice("Borrador anterior descartado.");
+        }
+      }
+
+      if (!cancelled) setCanAutosaveDraft(true);
+    }
+
+    void restoreDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!canAutosaveDraft) return;
+
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+
+    hasUserDraftChangeRef.current = true;
+    const timeout = window.setTimeout(() => {
+      void saveDraftSnapshot().then(() => setDraftNotice("Borrador autoguardado."));
+    }, 600);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    canAutosaveDraft,
+    draftKey,
+    folio,
+    date,
+    technicianName,
+    clientId,
+    clientName,
+    clientEmail,
+    branchId,
+    branchLocation,
+    clientContactName,
+    clientContactRole,
+    clientLocationAddress,
+    clientRegion,
+    equipmentId,
+    correlative,
+    correlativeLabel,
+    equipmentType,
+    criticality,
+    brand,
+    model,
+    serialNumber,
+    refrigerantType,
+    capacity,
+    voltage,
+    amperage,
+    ambientTemp,
+    returnTemp,
+    supplyTemp,
+    fanAmperage,
+    setPoint,
+    circuits,
+    checklist,
+    electricSchemeNote,
+    techSign,
+    clientSign,
+    techNameSign,
+    clientNameSign,
+    generalComments,
+    overallStatus,
+  ]);
+
+  useEffect(() => {
+    if (!canAutosaveDraft) return;
+
+    const saveBeforeLeaving = () => {
+      if (hasUserDraftChangeRef.current) void saveDraftSnapshot();
+    };
+
+    window.addEventListener("pagehide", saveBeforeLeaving);
+    window.addEventListener("beforeunload", saveBeforeLeaving);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforeLeaving);
+      window.removeEventListener("beforeunload", saveBeforeLeaving);
+    };
+  }, [
+    canAutosaveDraft,
+    draftKey,
+    folio,
+    date,
+    technicianName,
+    clientId,
+    clientName,
+    clientEmail,
+    branchId,
+    branchLocation,
+    clientContactName,
+    clientContactRole,
+    clientLocationAddress,
+    clientRegion,
+    equipmentId,
+    correlative,
+    correlativeLabel,
+    equipmentType,
+    criticality,
+    brand,
+    model,
+    serialNumber,
+    refrigerantType,
+    capacity,
+    voltage,
+    amperage,
+    ambientTemp,
+    returnTemp,
+    supplyTemp,
+    fanAmperage,
+    setPoint,
+    circuits,
+    checklist,
+    electricSchemeNote,
+    techSign,
+    clientSign,
+    techNameSign,
+    clientNameSign,
+    generalComments,
+    overallStatus,
+  ]);
 
   // Handle client change list and dynamic branch population
   const handleClientChange = (cName: string) => {
@@ -413,7 +665,12 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
     setTimeout(() => setOcrSuccess(false), 5000);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleClose = () => {
+    if (canAutosaveDraft && hasUserDraftChangeRef.current) void saveDraftSnapshot();
+    onClose();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const finalizedReport: HVACReport = {
@@ -463,27 +720,29 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       }
     };
 
-    onSave(finalizedReport);
+    await deleteFormDraft(draftKey);
+    await onSave(finalizedReport);
   };
 
   return (
-    <form id="hvac-report-creation-form" onSubmit={handleSubmit} className="space-y-8 animate-fade-in pb-12">
+    <form id="hvac-report-creation-form" onSubmit={handleSubmit} className="space-y-8 animate-fade-in pb-12 min-w-0">
       
       {/* Upper navigation header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             id="back-list-btn"
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-extrabold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
+            <h2 className="text-sm sm:text-base font-extrabold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
               <FileText className="w-5 h-5 text-blue-400" /> {report ? "Editar Informe HVAC" : "Nuevo Informe HVAC Pro"}
             </h2>
+            {draftNotice && <p className="text-[10px] text-blue-400 mt-1">{draftNotice}</p>}
             <p className="text-xs text-zinc-500">Completa y firma digitalmente la inspección técnica.</p>
           </div>
         </div>
@@ -492,7 +751,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
           <button
             id="cancel-report-btn"
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="flex-1 sm:flex-none px-4 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-zinc-350 text-xs font-semibold rounded-lg transition"
           >
             Cancelar
@@ -730,7 +989,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
                 Detalles del Cliente Vinculados
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-400 mb-1">Nombre Cliente</label>
                   <input
@@ -822,7 +1081,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
               <Sparkles className="w-4 h-4 text-blue-400" /> Ficha Técnica de la Unidad
             </h3>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Tipo de Equipo</label>
                 <select
@@ -927,7 +1186,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
                 />
               </div>
 
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <label className="block text-[11px] font-bold text-zinc-400 mb-1">Criticidad del Equipo</label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
@@ -986,7 +1245,7 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
               <Thermometer className="w-4 h-4 text-orange-400 animate-pulse" /> Mediciones Físicas
             </h3>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
                 <label className="block text-[11px] font-bold text-zinc-300 mb-1">Temperatura Ambiente</label>
                 <div className="flex bg-zinc-950 rounded border border-zinc-800 items-center px-2">
@@ -1219,19 +1478,19 @@ export default function ReportForm({ report, adminSettings, onSave, onClose, onU
       </div>
 
       {/* Persistent footer control pane */}
-      <div className="sticky bottom-4 inset-x-0 bg-black/90 backdrop-blur-md p-4 rounded-2xl border border-zinc-800 shadow-lg flex justify-end gap-3 z-30">
+      <div className="sticky bottom-4 inset-x-0 bg-black/90 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-zinc-800 shadow-lg flex flex-col sm:flex-row justify-end gap-3 z-30">
         <button
           id="form-btm-cancel"
           type="button"
-          onClick={onClose}
-          className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-xl transition cursor-pointer"
+          onClick={handleClose}
+          className="w-full sm:w-auto px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-xl transition cursor-pointer"
         >
           Cancelar
         </button>
         <button
           id="form-btm-save"
           type="submit"
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-lg transition cursor-pointer"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-lg transition cursor-pointer"
         >
           <Save className="w-4 h-4" /> Guardar y Registrar
         </button>
